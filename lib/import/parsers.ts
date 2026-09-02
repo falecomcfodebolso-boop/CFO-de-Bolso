@@ -190,7 +190,28 @@ export async function parseXLS(buffer: ArrayBuffer): Promise<TransacaoExtraida[]
 const LINHA_PDF_REGEX =
   /(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\s+(.+?)\s+(\(?-?\s?(?:R\$)?\s?-?[\d.,]*\d\)?)\s*$/;
 
+// pdfjs-dist (usado por pdf-parse) detecta em runtime se está rodando num
+// browser checando a presença de DOMMatrix/ImageData/Path2D — no runtime
+// Node.js serverless da Vercel isso falha com "ReferenceError: DOMMatrix
+// is not defined", mesmo usando só extração de texto (sem renderizar nada
+// visualmente). Como só usamos getText(), essas classes nunca são de fato
+// exercitadas — só precisam existir para não travar o carregamento do
+// módulo. São no-ops seguros; não afetam nenhuma outra parte do sistema.
+function polyfillGlobaisPdfjs() {
+  const g = globalThis as Record<string, unknown>;
+  if (typeof g.DOMMatrix === "undefined") {
+    g.DOMMatrix = class DOMMatrixPolyfill {};
+  }
+  if (typeof g.ImageData === "undefined") {
+    g.ImageData = class ImageDataPolyfill {};
+  }
+  if (typeof g.Path2D === "undefined") {
+    g.Path2D = class Path2DPolyfill {};
+  }
+}
+
 export async function parsePDF(buffer: ArrayBuffer): Promise<TransacaoExtraida[]> {
+  polyfillGlobaisPdfjs();
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: Buffer.from(buffer) });
   let texto: string;
