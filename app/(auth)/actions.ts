@@ -66,6 +66,10 @@ export async function createOrganizationAction(
   const legalName = String(formData.get("legal_name") || "").trim() || null;
   const taxId = String(formData.get("tax_id") || "").trim() || null;
   const baseCurrency = String(formData.get("base_currency") || "USD");
+  const regimeTributario = String(formData.get("regime_tributario") || "").trim() || null;
+  const atividadeTributaria = String(formData.get("atividade_tributaria") || "").trim() || null;
+  const aliquotaIssPct = String(formData.get("aliquota_iss_pct") || "").trim();
+  const aliquotaIss = aliquotaIssPct ? parseFloat(aliquotaIssPct.replace(",", ".")) / 100 : null;
 
   if (!name) return { error: "Informe o nome da organização." };
 
@@ -75,6 +79,9 @@ export async function createOrganizationAction(
     p_legal_name: legalName,
     p_tax_id: taxId,
     p_base_currency: baseCurrency,
+    p_regime_tributario: regimeTributario,
+    p_atividade_tributaria: atividadeTributaria,
+    p_aliquota_iss: aliquotaIss,
   });
 
   if (error) return { error: error.message };

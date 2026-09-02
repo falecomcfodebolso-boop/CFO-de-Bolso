@@ -3,10 +3,20 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
+export type RegimeTributario = "MEI" | "LUCRO_PRESUMIDO" | "LUCRO_REAL";
+export type AtividadeTributaria = "COMERCIO_INDUSTRIA" | "SERVICOS" | "COMERCIO_E_SERVICOS" | "TRANSPORTE_CARGA";
+
 export type Membership = {
   org_id: string;
   role: "owner" | "admin" | "accountant" | "viewer";
-  organizations: { id: string; name: string; base_currency: string };
+  organizations: {
+    id: string;
+    name: string;
+    base_currency: string;
+    regime_tributario: RegimeTributario | null;
+    atividade_tributaria: AtividadeTributaria | null;
+    aliquota_iss: number | null;
+  };
 };
 
 /**
@@ -33,7 +43,7 @@ export async function requireOrgContext(): Promise<{
 
   const { data: memberships, error } = await supabase
     .from("memberships")
-    .select("org_id, role, organizations(id, name, base_currency)")
+    .select("org_id, role, organizations(id, name, base_currency, regime_tributario, atividade_tributaria, aliquota_iss)")
     .returns<Membership[]>();
 
   if (error) throw error;

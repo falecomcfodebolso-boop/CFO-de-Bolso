@@ -9,6 +9,8 @@ import {
   BellRing,
   MessageCircle,
   FileBarChart,
+  Landmark,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
@@ -17,21 +19,29 @@ import { NavLinks, type NavItem } from "./nav-links";
 
 const ICON_CLASS = "h-3.5 w-3.5";
 
-const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className={ICON_CLASS} /> },
-  { href: "/diario", label: "Diário", icon: <BookOpenCheck className={ICON_CLASS} /> },
-  { href: "/importar", label: "Importar", icon: <Upload className={ICON_CLASS} /> },
-  { href: "/plano-de-contas", label: "Plano de Contas", icon: <ListTree className={ICON_CLASS} /> },
-  { href: "/razoes", label: "Razões", icon: <ScrollText className={ICON_CLASS} /> },
-  { href: "/balancete", label: "Balancete", icon: <Scale className={ICON_CLASS} /> },
-  { href: "/demonstracoes", label: "Demonstrações", icon: <FileBarChart className={ICON_CLASS} /> },
-  { href: "/carteira", label: "Carteira", icon: <LineChart className={ICON_CLASS} /> },
-  { href: "/vencimentos", label: "Vencimentos", icon: <BellRing className={ICON_CLASS} /> },
-  { href: "/cfo-bolso", label: "CFO de Bolso", icon: <MessageCircle className={ICON_CLASS} /> },
-];
+function montarNav(ehBrasilReais: boolean): NavItem[] {
+  const nav: NavItem[] = [
+    { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className={ICON_CLASS} /> },
+    { href: "/diario", label: "Diário", icon: <BookOpenCheck className={ICON_CLASS} /> },
+    { href: "/importar", label: "Importar", icon: <Upload className={ICON_CLASS} /> },
+    { href: "/plano-de-contas", label: "Plano de Contas", icon: <ListTree className={ICON_CLASS} /> },
+    { href: "/razoes", label: "Razões", icon: <ScrollText className={ICON_CLASS} /> },
+    { href: "/balancete", label: "Balancete", icon: <Scale className={ICON_CLASS} /> },
+    { href: "/demonstracoes", label: "Demonstrações", icon: <FileBarChart className={ICON_CLASS} /> },
+    { href: "/carteira", label: "Carteira", icon: <LineChart className={ICON_CLASS} /> },
+    { href: "/vencimentos", label: "Vencimentos", icon: <BellRing className={ICON_CLASS} /> },
+  ];
+  if (ehBrasilReais) {
+    nav.push({ href: "/obrigacoes-fiscais", label: "Obrigações Fiscais", icon: <Landmark className={ICON_CLASS} /> });
+  }
+  nav.push({ href: "/cfo-bolso", label: "CFO de Bolso", icon: <MessageCircle className={ICON_CLASS} /> });
+  nav.push({ href: "/configuracoes", label: "Configurações", icon: <Settings className={ICON_CLASS} /> });
+  return nav;
+}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, memberships, currentOrgId, currentMembership } = await requireOrgContext();
+  const NAV = montarNav(currentMembership.organizations?.base_currency === "BRL");
 
   return (
     <div className="min-h-screen bg-slate-50">
