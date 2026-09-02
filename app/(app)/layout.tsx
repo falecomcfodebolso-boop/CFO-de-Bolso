@@ -8,6 +8,7 @@ import {
   LineChart,
   BellRing,
   MessageCircle,
+  FileBarChart,
 } from "lucide-react";
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
@@ -23,6 +24,7 @@ const NAV: NavItem[] = [
   { href: "/plano-de-contas", label: "Plano de Contas", icon: <ListTree className={ICON_CLASS} /> },
   { href: "/razoes", label: "Razões", icon: <ScrollText className={ICON_CLASS} /> },
   { href: "/balancete", label: "Balancete", icon: <Scale className={ICON_CLASS} /> },
+  { href: "/demonstracoes", label: "Demonstrações", icon: <FileBarChart className={ICON_CLASS} /> },
   { href: "/carteira", label: "Carteira", icon: <LineChart className={ICON_CLASS} /> },
   { href: "/vencimentos", label: "Vencimentos", icon: <BellRing className={ICON_CLASS} /> },
   { href: "/cfo-bolso", label: "CFO de Bolso", icon: <MessageCircle className={ICON_CLASS} /> },

@@ -3,6 +3,7 @@
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { revalidatePath } from "next/cache";
 import { gerarPlanoDeContas, type PerfilEmpresa, type ContaProposta } from "@/lib/estruturacao/gerar-plano";
+import { classificarConta, type Natureza } from "@/lib/accounting/classificacao";
 
 export type GerarResultado = { error?: string; contas?: ContaProposta[]; modoDemo?: boolean };
 
@@ -61,6 +62,7 @@ export async function criarContasEmLoteAction(contas: ContaProposta[]): Promise<
       code: c.code,
       name: c.name,
       natureza: c.natureza,
+      ...classificarConta(c.natureza as Natureza, c.name),
     }))
   );
 

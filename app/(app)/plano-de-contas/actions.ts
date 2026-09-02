@@ -2,6 +2,7 @@
 
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { revalidatePath } from "next/cache";
+import { classificarConta, type Natureza } from "@/lib/accounting/classificacao";
 
 export type ActionState = { error?: string } | null;
 
@@ -23,12 +24,15 @@ export async function createContaAction(
     return { error: "Preencha código, nome e natureza da conta." };
   }
 
+  const classificacao = classificarConta(natureza as Natureza, name);
+
   const { error } = await supabase.from("plano_de_contas").insert({
     org_id: currentOrgId,
     code,
     name,
     natureza,
     parent_code: parentCode,
+    ...classificacao,
   });
 
   if (error) {
