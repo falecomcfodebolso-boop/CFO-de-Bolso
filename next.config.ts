@@ -18,6 +18,17 @@ const nextConfig: NextConfig = {
   // puro na Vercel. Colocar o pacote aqui faz o Next usar o require()
   // nativo do Node para ele, que resolve a condição certa.
   serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
+  // pdfjs-dist tenta rodar sua leitura de PDF num "worker": no Node.js, sem
+  // Worker de verdade, ele cai num modo "fake worker" que importa o próprio
+  // arquivo do worker (pdf.worker.mjs) dinamicamente, em runtime, a partir
+  // de um caminho montado com import.meta.url. Como esse import não é
+  // estático, o rastreador de arquivos da Vercel não detecta essa
+  // dependência sozinho e não inclui o arquivo no pacote da função
+  // serverless — daí o "Cannot find module .../pdf.worker.mjs" em
+  // produção (mesmo funcionando local). Isso força a inclusão manual.
+  outputFileTracingIncludes: {
+    "/importar": ["./node_modules/pdfjs-dist/legacy/build/**/*"],
+  },
 };
 
 export default nextConfig;
