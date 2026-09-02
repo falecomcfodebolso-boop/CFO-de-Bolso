@@ -1,6 +1,12 @@
 import Papa from "papaparse";
 import ExcelJS from "exceljs";
-import { PDFParse } from "pdf-parse";
+// IMPORTANTE: "pdf-parse" (via pdfjs-dist) referencia globais de navegador
+// (DOMMatrix, ImageData, Path2D) que não existem no runtime Node.js da
+// Vercel. Se importado no topo do arquivo, o simples carregamento do
+// módulo derruba com "ReferenceError: DOMMatrix is not defined" — e isso
+// quebra a rota de importação inteira, mesmo para OFX/CSV/XLS que nunca
+// chegam a usar essa lib. Por isso o import é feito de forma dinâmica,
+// só dentro de parsePDF, quando o arquivo realmente é um PDF.
 
 /**
  * Uma transação normalizada extraída de um extrato bancário, independente
@@ -185,6 +191,7 @@ const LINHA_PDF_REGEX =
   /(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\s+(.+?)\s+(\(?-?\s?(?:R\$)?\s?-?[\d.,]*\d\)?)\s*$/;
 
 export async function parsePDF(buffer: ArrayBuffer): Promise<TransacaoExtraida[]> {
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: Buffer.from(buffer) });
   let texto: string;
   try {
