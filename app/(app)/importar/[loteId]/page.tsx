@@ -1,7 +1,8 @@
 import { requireOrgContext } from "@/lib/org";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { TransacaoRow, type TransacaoImportada } from "./transacao-row";
+import type { TransacaoImportada } from "./transacao-row";
+import { TransacoesTable } from "./transacoes-table";
 
 export default async function LoteImportacaoPage({
   params,
@@ -54,31 +55,7 @@ export default async function LoteImportacaoPage({
         </p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-            <tr>
-              <th className="text-left px-4 py-2">Data</th>
-              <th className="text-left px-4 py-2">Descrição</th>
-              <th className="text-right px-4 py-2">Valor</th>
-              <th className="text-left px-4 py-2">Contrapartida</th>
-              <th className="px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {lista.map((t) => (
-              <TransacaoRow key={t.id} transacao={t} loteId={loteId} contas={contas ?? []} currency={currency} />
-            ))}
-            {lista.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-4 text-center text-slate-400">
-                  Nenhuma transação neste lote.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <TransacoesTable transacoes={lista} loteId={loteId} contas={contas ?? []} currency={currency} />
     </div>
   );
 }
