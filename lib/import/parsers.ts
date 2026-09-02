@@ -210,17 +210,24 @@ function polyfillGlobaisPdfjs() {
   }
 }
 
-export async function parsePDF(buffer: ArrayBuffer): Promise<TransacaoExtraida[]> {
+/**
+ * Extrai o texto puro de um PDF (compartilhado entre o parser de extrato
+ * bancário e o de extrato de custódia/corretora, em lib/portfolio).
+ */
+export async function extrairTextoPdf(buffer: ArrayBuffer): Promise<string> {
   polyfillGlobaisPdfjs();
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: Buffer.from(buffer) });
-  let texto: string;
   try {
     const resultado = await parser.getText();
-    texto = resultado.text;
+    return resultado.text;
   } finally {
     await parser.destroy();
   }
+}
+
+export async function parsePDF(buffer: ArrayBuffer): Promise<TransacaoExtraida[]> {
+  const texto = await extrairTextoPdf(buffer);
 
   if (!texto || texto.trim().length < 10) {
     throw new ParseError(
