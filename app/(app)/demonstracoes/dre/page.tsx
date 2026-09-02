@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDRE } from "@/lib/accounting/demonstrativos";
 import { fmtMoney } from "@/lib/format";
+import { ExportButtons } from "../export-buttons";
 
 function inicioDoAno() {
   return `${new Date().getFullYear()}-01-01`;
@@ -41,12 +42,15 @@ export default async function DrePage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/demonstracoes" className="text-sm text-slate-500 hover:underline">
-          ← Demonstrações
-        </Link>
-        <h1 className="text-xl font-semibold text-slate-900 mt-1">DRE — Demonstração do Resultado</h1>
-        <p className="text-sm text-slate-500">Receitas, custos e despesas do período selecionado.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/demonstracoes" className="text-sm text-slate-500 hover:underline">
+            ← Demonstrações
+          </Link>
+          <h1 className="text-xl font-semibold text-slate-900 mt-1">DRE — Demonstração do Resultado</h1>
+          <p className="text-sm text-slate-500">Receitas, custos e despesas do período selecionado.</p>
+        </div>
+        <ExportButtons hrefBase="/api/export/dre" query={{ inicio, fim }} />
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { BookOpenText, Scale3D, Waves, PieChart } from "lucide-react";
+import { BookOpenText, Scale3D, Waves, PieChart, FileDown } from "lucide-react";
+import { ExportButtons } from "./export-buttons";
 
 const DEMONSTRACOES = [
   {
@@ -32,7 +33,22 @@ const DEMONSTRACOES = [
   },
 ];
 
-export default function DemonstracoesPage() {
+function inicioDoAno() {
+  return `${new Date().getFullYear()}-01-01`;
+}
+function hoje() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default async function DemonstracoesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ inicio?: string; fim?: string }>;
+}) {
+  const { inicio: inicioParam, fim: fimParam } = await searchParams;
+  const inicio = inicioParam || inicioDoAno();
+  const fim = fimParam || hoje();
+
   return (
     <div className="space-y-6">
       <div>
@@ -58,6 +74,46 @@ export default function DemonstracoesPage() {
             <p className="text-sm text-slate-500 mt-1.5">{d.description}</p>
           </Link>
         ))}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <FileDown className="h-4 w-4 text-slate-500" />
+          <h2 className="text-sm font-semibold text-slate-900">Relatório Completo</h2>
+        </div>
+        <p className="text-sm text-slate-500 mb-4">
+          Baixa a DRE, o Balanço, a DFC e a DMPL do mesmo período, tudo em um único arquivo — a posição do
+          Balanço é calculada na data de fim escolhida.
+        </p>
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Início</label>
+            <input
+              type="date"
+              name="inicio"
+              defaultValue={inicio}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Fim</label>
+            <input
+              type="date"
+              name="fim"
+              defaultValue={fim}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800"
+          >
+            Atualizar período
+          </button>
+          <div className="ml-auto">
+            <ExportButtons hrefBase="/api/export/relatorio" query={{ inicio, fim }} />
+          </div>
+        </form>
       </div>
     </div>
   );
