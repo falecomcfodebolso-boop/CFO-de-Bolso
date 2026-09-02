@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Upload } from "lucide-react";
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovoAtivoForm } from "./novo-ativo-form";
 import { deleteAtivoAction } from "./actions";
@@ -50,9 +52,20 @@ export default async function CarteiraPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Carteira &amp; Índices</h1>
-        <p className="text-sm text-slate-500">Concentração, rentabilidade e risco da carteira de investimentos.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Carteira &amp; Índices</h1>
+          <p className="text-sm text-slate-500">Concentração, rentabilidade e risco da carteira de investimentos.</p>
+        </div>
+        {canWrite(currentMembership.role) && (
+          <Link
+            href="/carteira/importar"
+            className="shrink-0 inline-flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-md px-3 py-2 hover:bg-slate-800"
+          >
+            <Upload className="h-4 w-4" />
+            Importar de PDF
+          </Link>
+        )}
       </div>
 
       {canWrite(currentMembership.role) && (

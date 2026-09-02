@@ -23,11 +23,17 @@ Regras:
 - "confianca" é "alta", "media" ou "baixa" — use "baixa" quando a descrição for muito genérica ou ambígua.
 - Toda transação da lista deve aparecer no array de saída, na mesma ordem.`;
 
+// Descrições vindas de extratos de custódia/corretora (parser multi-linha) podem
+// concatenar várias linhas do PDF original e ficar bem mais longas que uma
+// descrição normal de extrato bancário. Truncamos antes de mandar pro modelo
+// pra manter o prompt enxuto e não estourar limites de tokens da API.
+const MAX_LEN_DESCRICAO = 300;
+
 function extrairJsonArray(texto: string): unknown {
   const inicio = texto.indexOf("[");
   const fim = texto.lastIndexOf("]");
   if (inicio === -1 || fim === -1 || fim < inicio) {
-    throw new Error("Resposta do modelo não continha um array JSON.");
+    throw new Error(`Resposta do modelo não continha um array JSON. Início da resposta: ${texto.slice(0, 200)}`);
   }
   return JSON.parse(texto.slice(inicio, fim + 1));
 }
@@ -45,13 +51,27 @@ export async function sugerirClassificacoes(
   const vazio = transacoes.map((_, index) => ({ index, conta_code: null, confianca: null }) as const);
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || transacoes.length === 0) return vazio;
+  if (!apiKey) {
+    console.warn("[sugerirClassificacoes] ANTHROPIC_API_KEY não configurada — pulando sugestão de IA.");
+    return vazio;
+  }
+  if (transacoes.length === 0) return vazio;
+  if (contas.length === 0) {
+    console.warn("[sugerirClassificacoes] Lista de contas vazia — nenhuma conta de contrapartida disponível para sugerir.");
+    return vazio;
+  }
 
   const listaContas = contas
     .map((c) => `${c.code} — ${c.name} (${c.natureza})`)
     .join("\n");
   const listaTransacoes = transacoes
-    .map((t, i) => `${i}: ${t.data} | ${t.descricao} | ${t.valor > 0 ? "entrada" : "saída"} de ${Math.abs(t.valor).toFixed(2)}`)
+    .map((t, i) => {
+      const descricao =
+        t.descricao.length > MAX_LEN_DESCRICAO
+          ? `${t.descricao.slice(0, MAX_LEN_DESCRICAO)}…`
+          : t.descricao;
+      return `${i}: ${t.data} | ${descricao} | ${t.valor > 0 ? "entrada" : "saída"} de ${Math.abs(t.valor).toFixed(2)}`;
+    })
     .join("\n");
 
   try {
@@ -64,7 +84,7 @@ export async function sugerirClassificacoes(
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: SYSTEM_PROMPT,
         messages: [
           {
@@ -75,7 +95,10 @@ export async function sugerirClassificacoes(
       }),
     });
 
-    if (!resp.ok) throw new Error(`Anthropic API error: ${resp.status}`);
+    if (!resp.ok) {
+      const corpo = await resp.text().catch(() => "");
+      throw new Error(`Anthropic API error: ${resp.status} — ${corpo.slice(0, 500)}`);
+    }
 
     const json = await resp.json();
     const texto = json.content?.[0]?.text ?? "";
@@ -91,9 +114,11 @@ export async function sugerirClassificacoes(
       }
       return s;
     });
-  } catch {
+  } catch (e) {
     // Falha ao consultar a IA não deve travar a importação — as
     // transações simplesmente ficam sem sugestão, para classificação manual.
+    // Logamos o motivo pra dar pra investigar depois nos Vercel Runtime Logs.
+    console.error("[sugerirClassificacoes] Falha ao obter sugestões da IA:", e);
     return vazio;
   }
 }
