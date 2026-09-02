@@ -1,7 +1,8 @@
 import { requireOrgContext } from "@/lib/org";
 import { UploadForm } from "./upload-form";
-import { fmtDate } from "@/lib/format";
+import { fmtDateHora } from "@/lib/format";
 import Link from "next/link";
+import { ExcluirLoteButton } from "./excluir-lote-button";
 
 export default async function ImportarPage() {
   const { supabase, currentOrgId } = await requireOrgContext();
@@ -20,6 +21,19 @@ export default async function ImportarPage() {
     .eq("org_id", currentOrgId)
     .order("created_at", { ascending: false })
     .limit(20);
+
+  // Pra decidir se cada importação ainda pode ser excluída (só pode se
+  // nenhuma transação dela já virou lançamento de verdade no Diário).
+  const loteIds = (lotes ?? []).map((l) => l.id);
+  const { data: transacoesConciliadas } =
+    loteIds.length > 0
+      ? await supabase
+          .from("import_transacoes")
+          .select("lote_id")
+          .in("lote_id", loteIds)
+          .eq("status", "conciliado")
+      : { data: [] as { lote_id: string }[] };
+  const lotesComConfirmadas = new Set((transacoesConciliadas ?? []).map((t) => t.lote_id));
 
   return (
     <div className="space-y-8">
@@ -45,12 +59,13 @@ export default async function ImportarPage() {
                 <th className="text-left px-4 py-2">Conta bancária</th>
                 <th className="text-right px-4 py-2">Transações</th>
                 <th className="px-4 py-2" />
+                <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {(lotes ?? []).map((l) => (
                 <tr key={l.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 text-slate-500">{fmtDate(l.created_at)}</td>
+                  <td className="px-4 py-2 text-slate-500 whitespace-nowrap">{fmtDateHora(l.created_at)}</td>
                   <td className="px-4 py-2 text-slate-800">
                     {l.nome_arquivo} <span className="text-xs text-slate-400 uppercase">({l.tipo_arquivo})</span>
                   </td>
@@ -61,11 +76,14 @@ export default async function ImportarPage() {
                       Revisar →
                     </Link>
                   </td>
+                  <td className="px-4 py-2 text-right">
+                    {!lotesComConfirmadas.has(l.id) && <ExcluirLoteButton loteId={l.id} />}
+                  </td>
                 </tr>
               ))}
               {(!lotes || lotes.length === 0) && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-4 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-4 text-center text-slate-400">
                     Nenhuma importação ainda.
                   </td>
                 </tr>

@@ -2,6 +2,7 @@
 
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import {
   detectarTipoArquivo,
   parseArquivo,
@@ -105,4 +106,40 @@ export async function uploadImportAction(
   }
 
   redirect(`/importar/${lote.id}`);
+}
+
+/**
+ * Exclui uma importação (lote) inteira — usado quando o usuário subiu o
+ * arquivo errado, subiu duplicado, ou desistiu antes de revisar/confirmar
+ * as transações. Por segurança, só permite excluir se NENHUMA transação do
+ * lote já foi confirmada (virou lançamento de verdade no Diário) — nesse
+ * caso o usuário precisa desfazer o(s) lançamento(s) primeiro.
+ */
+export async function excluirLoteAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
+  if (!canWrite(currentMembership.role)) return { error: "Seu papel (viewer) não permite excluir importações." };
+
+  const loteId = String(formData.get("lote_id") || "");
+  if (!loteId) return { error: "Importação não encontrada." };
+
+  const { count, error: countError } = await supabase
+    .from("import_transacoes")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", currentOrgId)
+    .eq("lote_id", loteId)
+    .eq("status", "conciliado");
+
+  if (countError) return { error: countError.message };
+  if (count && count > 0) {
+    return {
+      error:
+        "Essa importação já tem transações confirmadas (viraram lançamentos no Diário) — não é possível excluí-la. Ignore as transações pendentes manualmente, se quiser.",
+    };
+  }
+
+  const { error } = await supabase.from("import_lotes").delete().eq("org_id", currentOrgId).eq("id", loteId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/importar");
+  return null;
 }

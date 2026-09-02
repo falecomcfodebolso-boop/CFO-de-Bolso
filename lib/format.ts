@@ -10,3 +10,14 @@ export function fmtDate(value: string | Date) {
   const d = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "2-digit" }).format(d);
 }
+
+export function fmtDateHora(value: string | Date) {
+  const d = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
