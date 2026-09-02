@@ -239,11 +239,100 @@ export async function parsePDF(buffer: ArrayBuffer): Promise<TransacaoExtraida[]
     transacoes.push({ data, descricao, valor });
   }
 
-  if (transacoes.length === 0) {
-    throw new ParseError(
-      "Consegui ler o texto do PDF, mas não reconheci nenhuma linha no formato \"data ... descrição ... valor\". O layout desse extrato pode ser diferente do esperado — tente OFX ou CSV, que são mais confiáveis."
-    );
+  if (transacoes.length > 0) return transacoes;
+
+  // Não achou nada no formato "linha única" — tenta o formato de extrato de
+  // custódia/corretora (ex: Bradesco Bank International via Pershing), onde
+  // cada lançamento é espalhado em várias linhas.
+  const multiLinha = parsePDFCustodiaMultiLinha(texto);
+  if (multiLinha.length > 0) return multiLinha;
+
+  throw new ParseError(
+    "Consegui ler o texto do PDF, mas não reconheci nenhuma linha no formato \"data ... descrição ... valor\". O layout desse extrato pode ser diferente do esperado — tente OFX ou CSV, que são mais confiáveis."
+  );
+}
+
+// ---------------------------------------------------------------------
+// PDF de extrato de custódia/corretora (ex: Bradesco Bank International,
+// via Pershing LLC) — formato usado por contas de investimento no exterior,
+// bem diferente de um extrato de conta corrente:
+//   - as datas vêm no padrão americano MM/DD/AA (mês primeiro), não
+//     DD/MM/AAAA como no resto do sistema;
+//   - cada lançamento não cabe numa linha só: a(s) data(s) e o "tipo de
+//     atividade" vêm numa linha (ex: "07/06/26 BANK SETTLEMENT ACTIVITY"),
+//     seguida do identificador do título, a descrição (às vezes quebrada em
+//     2-3 linhas) e só a última linha termina em "valor MOEDA"
+//     (ex: "-2,380.00 USD").
+// A seção correspondente no PDF chama-se "Transactions in Date Sequence".
+// ---------------------------------------------------------------------
+
+/** dd/mm/aaaa é ambíguo com mm/dd/aa — por isso esse parser tem sua própria
+ *  função de data, assumindo sempre mês primeiro (convenção americana). */
+function parseDataAmericana(raw: string): string | null {
+  const m = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  const mes = m[1].padStart(2, "0");
+  const dia = m[2].padStart(2, "0");
+  const ano = m[3].length === 2 ? `20${m[3]}` : m[3];
+  const date = new Date(`${ano}-${mes}-${dia}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${ano}-${mes}-${dia}`;
+}
+
+// Só considera início de lançamento se o texto logo após a(s) data(s) for um
+// "tipo de atividade" puro (só letras/espaços/&, sem dígitos nem barras) com
+// pelo menos 2 palavras. Isso distingue de datas soltas no meio da descrição
+// do título (quebradas de linha pelo extrator de texto do PDF), que sempre
+// têm dígitos/barras logo depois (ex: "DTD 01/13/18...", "RD 07/02...").
+const INICIO_BLOCO_CUSTODIA_REGEX =
+  /^(\d{1,2}\/\d{1,2}\/\d{2,4})(?:\s+\d{1,2}\/\d{1,2}\/\d{2,4})?\s+([A-Z][A-Z& ]*[A-Z])$/;
+const FIM_BLOCO_CUSTODIA_REGEX = /(-?\$?\s?[\d.,]*\d)\s+([A-Z]{3})\s*$/;
+const JANELA_MAX_BLOCO_CUSTODIA = 8;
+
+// Tipos de atividade que representam apenas reclassificação interna entre
+// sub-posições da própria carteira (ex: mover um título de uma "sleeve" para
+// outra) — sem efeito real de caixa. Ignorados para não poluir o Diário.
+const ATIVIDADES_SEM_EFEITO_DE_CAIXA = new Set(["ACTIVITY WITHIN YOUR ACCT"]);
+
+function parsePDFCustodiaMultiLinha(texto: string): TransacaoExtraida[] {
+  const linhas = texto
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const transacoes: TransacaoExtraida[] = [];
+
+  for (let i = 0; i < linhas.length; i++) {
+    const inicio = linhas[i].match(INICIO_BLOCO_CUSTODIA_REGEX);
+    if (!inicio) continue;
+    const tipoAtividade = inicio[2].trim();
+    if (tipoAtividade.split(/\s+/).length < 2) continue; // evita falso positivo de 1 palavra
+    const data = parseDataAmericana(inicio[1]);
+    if (!data) continue;
+
+    const descricaoPartes: string[] = [];
+    let valor: number | null = null;
+    let j = i + 1;
+    for (; j < linhas.length && j < i + JANELA_MAX_BLOCO_CUSTODIA; j++) {
+      const linha = linhas[j];
+      if (INICIO_BLOCO_CUSTODIA_REGEX.test(linha)) break; // bloco anterior não fechou — descarta
+      const fim = linha.match(FIM_BLOCO_CUSTODIA_REGEX);
+      if (fim) {
+        valor = parseValorFlexivel(fim[1]);
+        const resto = linha.slice(0, fim.index).trim();
+        if (resto) descricaoPartes.push(resto);
+        break;
+      }
+      descricaoPartes.push(linha);
+    }
+
+    if (valor === null) continue; // bloco não fechou dentro da janela
+    i = j;
+    if (valor === 0 || ATIVIDADES_SEM_EFEITO_DE_CAIXA.has(tipoAtividade)) continue;
+
+    const descricao = [tipoAtividade, ...descricaoPartes].filter(Boolean).join(" — ").slice(0, 300);
+    transacoes.push({ data, descricao, valor });
   }
+
   return transacoes;
 }
 
