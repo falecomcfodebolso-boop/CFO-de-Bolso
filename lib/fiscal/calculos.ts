@@ -276,3 +276,164 @@ export function trimestreParaDatas(ano: number, trimestre: 1 | 2 | 3 | 4) {
   const fim = new Date(Date.UTC(ano, mesInicio + 3, 0)).toISOString().slice(0, 10);
   return { inicio, fim };
 }
+
+
+// ---------------------------------------------------------------------
+// Simples Nacional
+// ---------------------------------------------------------------------
+// Tabelas dos Anexos I a V (LC 123/2006, com a redação da LC 155/2016,
+// em vigor desde 2018) — não mudam de ano a ano como o limite do MEI,
+// mas mantemos o sufixo _2026 por consistência com as demais tabelas
+// desta tela. Alíquota efetiva = (RBT12 × alíquota nominal da faixa −
+// parcela a deduzir) / RBT12. O DAS é uma guia única que já reúne
+// IRPJ, CSLL, PIS, COFINS, CPP e ICMS/ISS — não abrimos essa composição
+// aqui porque o percentual de cada tributo dentro do DAS varia por
+// Anexo e por faixa.
+export type AnexoSimples = "I" | "II" | "III" | "IV" | "V";
+
+export type FaixaSimples = { ate: number; aliquota: number; deduzir: number };
+
+export const TABELA_SIMPLES_2026: Record<AnexoSimples, FaixaSimples[]> = {
+  I: [
+    { ate: 180_000, aliquota: 0.04, deduzir: 0 },
+    { ate: 360_000, aliquota: 0.073, deduzir: 5_940 },
+    { ate: 720_000, aliquota: 0.095, deduzir: 13_860 },
+    { ate: 1_800_000, aliquota: 0.107, deduzir: 22_500 },
+    { ate: 3_600_000, aliquota: 0.143, deduzir: 87_300 },
+    { ate: 4_800_000, aliquota: 0.19, deduzir: 378_000 },
+  ],
+  II: [
+    { ate: 180_000, aliquota: 0.045, deduzir: 0 },
+    { ate: 360_000, aliquota: 0.078, deduzir: 5_940 },
+    { ate: 720_000, aliquota: 0.10, deduzir: 13_860 },
+    { ate: 1_800_000, aliquota: 0.112, deduzir: 22_500 },
+    { ate: 3_600_000, aliquota: 0.147, deduzir: 85_500 },
+    { ate: 4_800_000, aliquota: 0.30, deduzir: 720_000 },
+  ],
+  III: [
+    { ate: 180_000, aliquota: 0.06, deduzir: 0 },
+    { ate: 360_000, aliquota: 0.112, deduzir: 9_360 },
+    { ate: 720_000, aliquota: 0.135, deduzir: 17_640 },
+    { ate: 1_800_000, aliquota: 0.16, deduzir: 35_640 },
+    { ate: 3_600_000, aliquota: 0.21, deduzir: 125_640 },
+    { ate: 4_800_000, aliquota: 0.33, deduzir: 648_000 },
+  ],
+  IV: [
+    { ate: 180_000, aliquota: 0.045, deduzir: 0 },
+    { ate: 360_000, aliquota: 0.09, deduzir: 8_100 },
+    { ate: 720_000, aliquota: 0.102, deduzir: 12_420 },
+    { ate: 1_800_000, aliquota: 0.14, deduzir: 39_780 },
+    { ate: 3_600_000, aliquota: 0.22, deduzir: 183_780 },
+    { ate: 4_800_000, aliquota: 0.33, deduzir: 828_000 },
+  ],
+  V: [
+    { ate: 180_000, aliquota: 0.155, deduzir: 0 },
+    { ate: 360_000, aliquota: 0.18, deduzir: 4_500 },
+    { ate: 720_000, aliquota: 0.195, deduzir: 9_900 },
+    { ate: 1_800_000, aliquota: 0.205, deduzir: 17_100 },
+    { ate: 3_600_000, aliquota: 0.23, deduzir: 62_100 },
+    { ate: 4_800_000, aliquota: 0.305, deduzir: 540_000 },
+  ],
+};
+
+export const NOME_ANEXO_SIMPLES: Record<AnexoSimples, string> = {
+  I: "Anexo I — Comércio",
+  II: "Anexo II — Indústria",
+  III: "Anexo III — Serviços (locação de bens móveis e afins)",
+  IV: "Anexo IV — Serviços (construção, limpeza, vigilância, advocacia e afins — CPP recolhida fora do DAS)",
+  V: "Anexo V — Serviços intelectuais/técnicos (sujeito ao Fator R)",
+};
+
+export type CalculoSimplesNacional = {
+  regime: "SIMPLES_NACIONAL";
+  anexo: AnexoSimples;
+  rbt12: number;
+  faixaIndex: number;
+  aliquotaNominal: number;
+  parcelaDeduzir: number;
+  aliquotaEfetiva: number;
+  receitaBrutaMes: number;
+  dasEstimado: number;
+};
+
+export function calcularSimplesNacional(params: {
+  anexo: AnexoSimples;
+  rbt12: number;
+  receitaBrutaMes: number;
+}): CalculoSimplesNacional {
+  const { anexo, receitaBrutaMes } = params;
+  const rbt12 = Math.max(0, params.rbt12);
+  const tabela = TABELA_SIMPLES_2026[anexo];
+
+  let faixaIndex = tabela.findIndex((f) => rbt12 <= f.ate);
+  if (faixaIndex === -1) faixaIndex = tabela.length - 1; // acima do limite: usa a última faixa como referência
+  const faixa = tabela[faixaIndex];
+
+  const aliquotaEfetiva = rbt12 > 0 ? Math.max(0, (rbt12 * faixa.aliquota - faixa.deduzir) / rbt12) : faixa.aliquota;
+
+  return {
+    regime: "SIMPLES_NACIONAL",
+    anexo,
+    rbt12,
+    faixaIndex,
+    aliquotaNominal: faixa.aliquota,
+    parcelaDeduzir: faixa.deduzir,
+    aliquotaEfetiva,
+    receitaBrutaMes: Math.max(0, receitaBrutaMes),
+    dasEstimado: Math.max(0, receitaBrutaMes) * aliquotaEfetiva,
+  };
+}
+
+/** Limite anual de receita bruta do Simples Nacional (2026), pra atividade exercida o ano inteiro. */
+export const LIMITE_SIMPLES_ANUAL = 4_800_000;
+
+export type StatusLimiteSimples = "DENTRO_DO_LIMITE" | "PROXIMO_DO_LIMITE" | "EXCEDIDO_ATE_20_POR_CENTO" | "EXCEDIDO_ACIMA_DE_20_POR_CENTO";
+
+export type CalculoLimiteSimples = {
+  ano: number;
+  receitaBrutaAno: number;
+  mesesDeAtividade: number;
+  limiteProporcional: number;
+  percentualUtilizado: number;
+  excedente: number;
+  status: StatusLimiteSimples;
+};
+
+export function calcularLimiteSimples(params: {
+  ano: number;
+  receitaBrutaAno: number;
+  dataAberturaAtividade: string | null;
+}): CalculoLimiteSimples {
+  const { ano, dataAberturaAtividade } = params;
+  const receitaBrutaAno = Math.max(0, params.receitaBrutaAno);
+  const mesesDeAtividade = mesesDeAtividadeNoAno(ano, dataAberturaAtividade);
+  const limiteProporcional = (LIMITE_SIMPLES_ANUAL / 12) * mesesDeAtividade;
+  const percentualUtilizado = limiteProporcional > 0 ? receitaBrutaAno / limiteProporcional : 0;
+  const excedente = Math.max(0, receitaBrutaAno - limiteProporcional);
+
+  let status: StatusLimiteSimples;
+  if (receitaBrutaAno <= limiteProporcional) {
+    status = percentualUtilizado >= 0.9 ? "PROXIMO_DO_LIMITE" : "DENTRO_DO_LIMITE";
+  } else if (receitaBrutaAno <= limiteProporcional * FATOR_DESENQUADRAMENTO_RETROATIVO) {
+    status = "EXCEDIDO_ATE_20_POR_CENTO";
+  } else {
+    status = "EXCEDIDO_ACIMA_DE_20_POR_CENTO";
+  }
+
+  return { ano, receitaBrutaAno, mesesDeAtividade, limiteProporcional, percentualUtilizado, excedente, status };
+}
+
+/** Início/fim de um mês específico (usado no cálculo mensal do DAS do Simples). */
+export function mesParaDatas(ano: number, mes: number): { inicio: string; fim: string } {
+  const inicio = new Date(Date.UTC(ano, mes - 1, 1)).toISOString().slice(0, 10);
+  const fim = new Date(Date.UTC(ano, mes, 0)).toISOString().slice(0, 10);
+  return { inicio, fim };
+}
+
+/** Janela de 12 meses terminando no mês de `dataFim` (inclusive) — usada para apurar o RBT12. */
+export function janelaDozeMeses(dataFim: string): { inicio: string; fim: string } {
+  const d = new Date(`${dataFim}T00:00:00Z`);
+  const fim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+  const inicio = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 11, 1)).toISOString().slice(0, 10);
+  return { inicio, fim };
+}

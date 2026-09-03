@@ -16,16 +16,26 @@ const ATIVIDADES_PRESUMIDO = [
   { value: "TRANSPORTE_CARGA", label: "Transporte de cargas" },
 ];
 
+const ANEXOS_SIMPLES = [
+  { value: "I", label: "Anexo I — Comércio" },
+  { value: "II", label: "Anexo II — Indústria" },
+  { value: "III", label: "Anexo III — Serviços (locação de bens móveis e afins)" },
+  { value: "IV", label: "Anexo IV — Serviços (construção, limpeza, vigilância, advocacia)" },
+  { value: "V", label: "Anexo V — Serviços intelectuais/técnicos" },
+];
+
 export function RegimeTributarioForm({
   regimeAtual,
   atividadeAtual,
   aliquotaIssAtual,
   dataAberturaAtual,
+  anexoSimplesAtual,
 }: {
   regimeAtual: RegimeTributario | null;
   atividadeAtual: AtividadeTributaria | null;
   aliquotaIssAtual: number | null;
   dataAberturaAtual: string | null;
+  anexoSimplesAtual: string | null;
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     atualizarRegimeTributarioAction,
@@ -45,6 +55,7 @@ export function RegimeTributarioForm({
         >
           <option value="">Não configurado</option>
           <option value="MEI">MEI</option>
+          <option value="SIMPLES_NACIONAL">Simples Nacional</option>
           <option value="LUCRO_PRESUMIDO">Lucro Presumido</option>
           <option value="LUCRO_REAL">Lucro Real</option>
         </select>
@@ -79,6 +90,45 @@ export function RegimeTributarioForm({
             <p className="text-xs text-slate-400 mt-1">
               Se o MEI foi aberto no meio do ano, informe a data pra calcularmos o limite anual de
               faturamento proporcional aos meses de atividade, em vez do limite cheio de R$ 81.000.
+            </p>
+          </div>
+        </>
+      )}
+
+      {regime === "SIMPLES_NACIONAL" && (
+        <>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Anexo do Simples Nacional</label>
+            <select
+              name="anexo_simples"
+              defaultValue={anexoSimplesAtual ?? "I"}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              {ANEXOS_SIMPLES.map((a) => (
+                <option key={a.value} value={a.value}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Depende da atividade principal da empresa — se não tiver certeza, confira no seu contrato
+              social ou pergunte ao seu contador. O Anexo V (sujeito ao &quot;Fator R&quot;) tem regras
+              extras que este app não calcula automaticamente.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Data de abertura da atividade (opcional)
+            </label>
+            <input
+              name="data_abertura_atividade"
+              type="date"
+              defaultValue={dataAberturaAtual ?? ""}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Usado pra proporcionalizar o limite anual (R$ 4,8 milhões) aos meses de atividade, caso a
+              empresa tenha aberto no meio do ano.
             </p>
           </div>
         </>

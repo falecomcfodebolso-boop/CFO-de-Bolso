@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
-export type RegimeTributario = "MEI" | "LUCRO_PRESUMIDO" | "LUCRO_REAL";
+export type RegimeTributario = "MEI" | "LUCRO_PRESUMIDO" | "LUCRO_REAL" | "SIMPLES_NACIONAL";
 export type AtividadeTributaria = "COMERCIO_INDUSTRIA" | "SERVICOS" | "COMERCIO_E_SERVICOS" | "TRANSPORTE_CARGA";
 
 export type Membership = {
@@ -17,6 +17,7 @@ export type Membership = {
     atividade_tributaria: AtividadeTributaria | null;
     aliquota_iss: number | null;
     data_abertura_atividade: string | null;
+    anexo_simples: string | null;
   };
 };
 
@@ -45,7 +46,7 @@ export async function requireOrgContext(): Promise<{
   const { data: memberships, error } = await supabase
     .from("memberships")
     .select(
-      "org_id, role, organizations(id, name, base_currency, regime_tributario, atividade_tributaria, aliquota_iss, data_abertura_atividade)"
+      "org_id, role, organizations(id, name, base_currency, regime_tributario, atividade_tributaria, aliquota_iss, data_abertura_atividade, anexo_simples)"
     )
     .returns<Membership[]>();
 

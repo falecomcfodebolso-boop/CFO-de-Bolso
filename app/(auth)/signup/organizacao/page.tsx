@@ -15,6 +15,14 @@ const ATIVIDADES_PRESUMIDO = [
   { value: "TRANSPORTE_CARGA", label: "Transporte de cargas" },
 ];
 
+const ANEXOS_SIMPLES = [
+  { value: "I", label: "Anexo I — Comércio" },
+  { value: "II", label: "Anexo II — Indústria" },
+  { value: "III", label: "Anexo III — Serviços (locação de bens móveis e afins)" },
+  { value: "IV", label: "Anexo IV — Serviços (construção, limpeza, vigilância, advocacia)" },
+  { value: "V", label: "Anexo V — Serviços intelectuais/técnicos" },
+];
+
 export default function CreateOrganizationPage() {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     createOrganizationAction,
@@ -104,6 +112,7 @@ export default function CreateOrganizationPage() {
               >
                 <option value="">Prefiro configurar depois</option>
                 <option value="MEI">MEI</option>
+                <option value="SIMPLES_NACIONAL">Simples Nacional</option>
                 <option value="LUCRO_PRESUMIDO">Lucro Presumido</option>
                 <option value="LUCRO_REAL">Lucro Real</option>
               </select>
@@ -119,6 +128,23 @@ export default function CreateOrganizationPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {regime === "SIMPLES_NACIONAL" && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Anexo do Simples Nacional</label>
+                <select name="anexo_simples" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                  {ANEXOS_SIMPLES.map((a) => (
+                    <option key={a.value} value={a.value}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">
+                  Depende da atividade principal da empresa — se não tiver certeza, confira no contrato
+                  social ou pergunte ao seu contador.
+                </p>
               </div>
             )}
 

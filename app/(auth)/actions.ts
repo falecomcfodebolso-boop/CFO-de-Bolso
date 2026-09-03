@@ -70,6 +70,7 @@ export async function createOrganizationAction(
   const atividadeTributaria = String(formData.get("atividade_tributaria") || "").trim() || null;
   const aliquotaIssPct = String(formData.get("aliquota_iss_pct") || "").trim();
   const aliquotaIss = aliquotaIssPct ? parseFloat(aliquotaIssPct.replace(",", ".")) / 100 : null;
+  const anexoSimples = String(formData.get("anexo_simples") || "").trim() || null;
 
   if (!name) return { error: "Informe o nome da organização." };
 
@@ -82,6 +83,7 @@ export async function createOrganizationAction(
     p_regime_tributario: regimeTributario,
     p_atividade_tributaria: atividadeTributaria,
     p_aliquota_iss: aliquotaIss,
+    p_anexo_simples: anexoSimples,
   });
 
   if (error) return { error: error.message };

@@ -19,6 +19,7 @@ export async function atualizarRegimeTributarioAction(
   const aliquotaIssPct = String(formData.get("aliquota_iss_pct") || "").trim();
   const aliquotaIss = aliquotaIssPct ? parseFloat(aliquotaIssPct.replace(",", ".")) / 100 : null;
   const dataAbertura = String(formData.get("data_abertura_atividade") || "").trim() || null;
+  const anexoSimples = String(formData.get("anexo_simples") || "").trim() || null;
 
   const { error } = await supabase.rpc("update_regime_tributario", {
     p_org_id: currentOrgId,
@@ -26,6 +27,7 @@ export async function atualizarRegimeTributarioAction(
     p_atividade_tributaria: atividade,
     p_aliquota_iss: aliquotaIss,
     p_data_abertura_atividade: dataAbertura,
+    p_anexo_simples: anexoSimples,
   });
 
   if (error) return { error: error.message };
