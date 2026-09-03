@@ -13,9 +13,14 @@ function somarSaldo(saldos: { conta_code: string; saldo: number }[], codigos: st
     .reduce((acc, c) => acc + Number(saldos.find((s) => s.conta_code === c)?.saldo ?? 0), 0);
 }
 
-export default async function AjustesPage() {
+export default async function AjustesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ data?: string }>;
+}) {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const podeEscrever = canWrite(currentMembership.role);
+  const { data: dataParam } = await searchParams;
 
   const [{ data: contasData }, { data: ativosData }, { data: ajustesData }, saldos] = await Promise.all([
     supabase.from("plano_de_contas").select("code, name").eq("org_id", currentOrgId).order("code"),
@@ -42,16 +47,17 @@ export default async function AjustesPage() {
   const ajustes = ajustesData ?? [];
 
   const hoje = new Date().toISOString().slice(0, 10);
+  const dataRef = dataParam || hoje;
 
   // Agrupa os ativos cadastrados por grupo de acruo, calculando o cálculo interno papel a
-  // papel de cada um (referência: hoje) e o subtotal do grupo.
+  // papel de cada um na data de referência selecionada (padrão: hoje) e o subtotal do grupo.
   const grupos = new Map<
     string,
     { contaAcruo: string; contaReceita: string; itens: (AtivoAcruo & { dias: number | null; valorCalc: number | null })[] }
   >();
   for (const a of ativos) {
     if (!a.grupo_acruo_nome || !a.conta_acruo_code || !a.conta_receita_code) continue;
-    const r = calcularAcruoInterno(a, hoje);
+    const r = calcularAcruoInterno(a, dataRef);
     if (!grupos.has(a.grupo_acruo_nome)) {
       grupos.set(a.grupo_acruo_nome, { contaAcruo: a.conta_acruo_code, contaReceita: a.conta_receita_code, itens: [] });
     }
@@ -95,12 +101,36 @@ export default async function AjustesPage() {
 
       {grupos.size > 0 && (
         <div className="space-y-4">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Detalhamento por papel <span className="font-normal text-slate-400">(referência: hoje)</span>
-          </h2>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-900">
+              Detalhamento por papel{" "}
+              <span className="font-normal text-slate-400">
+                (referência: {new Date(`${dataRef}T00:00:00Z`).toLocaleDateString("pt-BR")})
+              </span>
+            </h2>
+            <form method="get" className="flex items-end gap-2">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Data de referência</label>
+                <input
+                  type="date"
+                  name="data"
+                  defaultValue={dataRef}
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+                />
+              </div>
+              <button
+                type="submit"
+                className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800"
+              >
+                Atualizar
+              </button>
+            </form>
+          </div>
           <p className="text-xs text-slate-400 -mt-2">
-            &ldquo;Informado pelo banco&rdquo; mostra o valor da última apuração registrada para o grupo (veja
-            &ldquo;Nova apuração&rdquo; abaixo). Sem nenhuma apuração registrada ainda, esse campo fica vazio.
+            Use a data de referência acima para comparar com um extrato de uma data específica (ex.: a
+            data-base do valuation statement do banco). &ldquo;Informado pelo banco&rdquo; mostra o valor da
+            apuração registrada para essa data — ou, na falta dela, a apuração mais recente registrada em ou
+            antes dessa data (veja &ldquo;Nova apuração&rdquo; abaixo).
           </p>
           {Array.from(grupos.entries()).map(([nomeGrupo, g]) => {
             const subtotal = g.itens.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
@@ -110,7 +140,12 @@ export default async function AjustesPage() {
             const subtotalPendente = itensPendentes.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
             const subtotalConfirmado = itensConfirmados.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
             const saldoContabilAtual = somarSaldo(saldos, g.contaAcruo);
-            const ultimoAjuste = ajustes.find((a) => a.nome_grupo === nomeGrupo);
+            // Prioriza a apuração registrada exatamente na data de referência escolhida; na
+            // falta dela, usa a mais recente registrada em ou antes dessa data (ajustes já vêm
+            // ordenados por data_base decrescente).
+            const ajustesGrupo = ajustes.filter((a) => a.nome_grupo === nomeGrupo);
+            const ultimoAjuste =
+              ajustesGrupo.find((a) => a.data_base === dataRef) ?? ajustesGrupo.find((a) => a.data_base <= dataRef) ?? null;
             // Ao comparar com o banco, usa só as posições já confirmadas pelo custodiante — as
             // "pending receipt" ainda não têm valor reportado, então entrariam como diferença
             // artificial de 100% se somadas ao lado do cálculo.
@@ -243,7 +278,7 @@ export default async function AjustesPage() {
       {podeEscrever && (
         <div className="rounded-lg border border-slate-200 p-4">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Nova apuração</h2>
-          <NovoAjusteForm contas={contas} grupos={gruposParaForm} />
+          <NovoAjusteForm contas={contas} grupos={gruposParaForm} dataBasePadrao={dataRef} />
         </div>
       )}
 

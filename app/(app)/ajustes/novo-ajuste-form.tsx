@@ -6,7 +6,15 @@ import { registrarAjusteAction, type ActionState } from "./actions";
 type Conta = { code: string; name: string };
 type Grupo = { nome: string; contaAcruo: string; contaReceita: string };
 
-export function NovoAjusteForm({ contas, grupos }: { contas: Conta[]; grupos: Grupo[] }) {
+export function NovoAjusteForm({
+  contas,
+  grupos,
+  dataBasePadrao,
+}: {
+  contas: Conta[];
+  grupos: Grupo[];
+  dataBasePadrao?: string;
+}) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(registrarAjusteAction, null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -96,7 +104,13 @@ export function NovoAjusteForm({ contas, grupos }: { contas: Conta[]; grupos: Gr
         ))}
       </datalist>
 
-      <input name="data_base" type="date" required className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+      <input
+        name="data_base"
+        type="date"
+        required
+        defaultValue={dataBasePadrao}
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+      />
       <input
         name="valor_reportado_banco"
         type="number"
