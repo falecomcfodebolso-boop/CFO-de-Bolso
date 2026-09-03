@@ -42,11 +42,14 @@ const PALAVRAS_CAIXA = [
 const PALAVRAS_FINANCEIRA_DESPESA = [
   "juros pass",
   "juros de empr",
-  "despesa financeira",
   "iof",
   "tarifa banc",
   "encargo financeiro",
 ];
+// Regex à parte (em vez de string fixa) porque "despesa financeira" no
+// singular não batia com "Despesas Financeiras" no plural (nome mais
+// comum no plano de contas) — mesmo problema que afetava a receita.
+const REGEX_DESPESA_FINANCEIRA = /despesas?\s+financeir/i;
 const PALAVRAS_FINANCEIRA_RECEITA = ["juros", "rendimento", "receita financeira"];
 const PALAVRAS_CUSTO = ["custo da merc", "cmv", "custo do servi", "csp", "custo de produ", "cpv"];
 const PALAVRAS_IMPOSTO_LUCRO = ["irpj", "csll", "imposto de renda", "contribuição social sobre"];
@@ -124,7 +127,7 @@ export function classificarConta(natureza: Natureza, name: string): Classificaca
     if (contemAlguma(nome, PALAVRAS_IMPOSTO_LUCRO)) {
       return { circulante: null, is_caixa: false, grupo_dre: "impostos_sobre_lucro", grupo_dfc: "operacional" };
     }
-    if (contemAlguma(nome, PALAVRAS_FINANCEIRA_DESPESA)) {
+    if (contemAlguma(nome, PALAVRAS_FINANCEIRA_DESPESA) || REGEX_DESPESA_FINANCEIRA.test(nome)) {
       return { circulante: null, is_caixa: false, grupo_dre: "despesas_financeiras", grupo_dfc: "operacional" };
     }
     if (contemAlguma(nome, PALAVRAS_CUSTO)) {
