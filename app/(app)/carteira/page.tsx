@@ -3,47 +3,78 @@ import { Upload } from "lucide-react";
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovoAtivoForm } from "./novo-ativo-form";
 import { deleteAtivoAction } from "./actions";
+import { AnaliseCarteira } from "./analise-carteira";
 import { fmtMoney } from "@/lib/format";
 import {
   totalCarteira,
   hhi,
   concentracaoPorCustodiante,
-  top5Concentracao,
+  topNConcentracao,
   taxaMediaPonderada,
+  prazoMedioPonderado,
+  distribuicaoPorVencimento,
+  distribuicaoPorGrupoEmissor,
+  exposicaoEstrutura,
+  exposicaoPais,
   estimarCustoDeCapital,
   classificarConcentracao,
+  diasParaVencimento,
   type Ativo,
 } from "@/lib/portfolio/indices";
 import { totalPorNatureza, getSaldosPorConta } from "@/lib/accounting/queries";
+import { getBalanco } from "@/lib/accounting/demonstrativos";
 import { sincronizarComSaldoContabil } from "@/lib/accounting/sync";
 
 export default async function CarteiraPage() {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
+  const podeEscrever = canWrite(currentMembership.role);
+  const hoje = new Date().toISOString().slice(0, 10);
 
-  const [{ data: ativosData, error }, saldos] = await Promise.all([
-    supabase.from("ativos").select("*").eq("org_id", currentOrgId).order("valor_atual", { ascending: false }),
-    getSaldosPorConta(supabase, currentOrgId),
-  ]);
+  const [{ data: ativosData, error }, saldos, { data: primeiroLancamento }, { data: analisesData }] =
+    await Promise.all([
+      supabase.from("ativos").select("*").eq("org_id", currentOrgId).order("valor_atual", { ascending: false }),
+      getSaldosPorConta(supabase, currentOrgId),
+      supabase
+        .from("lancamentos")
+        .select("data")
+        .eq("org_id", currentOrgId)
+        .order("data", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("analises_carteira")
+        .select("id, conteudo, created_at")
+        .eq("org_id", currentOrgId)
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
   if (error) throw error;
 
   const ativosBrutos = (ativosData ?? []) as Ativo[];
   const ativos = sincronizarComSaldoContabil(ativosBrutos, saldos);
+  const analises = analisesData ?? [];
+
   const total = totalCarteira(ativos);
   const hhiValue = hhi(ativos);
   const concentracao = classificarConcentracao(hhiValue);
   const porCustodiante = concentracaoPorCustodiante(ativos);
-  const top5 = top5Concentracao(ativos);
+  const top10 = topNConcentracao(ativos, 10);
   const taxaMedia = taxaMediaPonderada(ativos);
+  const prazoMedio = prazoMedioPonderado(ativos);
+  const porVencimento = distribuicaoPorVencimento(ativos);
+  const porGrupo = distribuicaoPorGrupoEmissor(ativos);
+  const expCln = exposicaoEstrutura(ativos, "CLN");
+  const expBrasil = exposicaoPais(ativos, "Brasil");
 
   const ativoContabil = totalPorNatureza(saldos, "ATIVO");
   const receita = totalPorNatureza(saldos, "RECEITA");
   const despesa = totalPorNatureza(saldos, "DESPESA");
   const resultado = receita - despesa;
   const roa = ativoContabil ? resultado / ativoContabil : 0;
+  const margemFinanceira = receita ? resultado / receita : 0;
 
   // Estimativa de custo de capital (K) — parâmetros de referência, ajustáveis.
-  // Ver observação na tela: não é uma taxa de mercado cotada.
   const k = estimarCustoDeCapital({
     taxaLivreDeRisco: 0.0468,
     spreadCredito: 0.009,
@@ -52,6 +83,19 @@ export default async function CarteiraPage() {
   });
   const spreadVsK = taxaMedia - k;
 
+  // ROI do período: resultado ÷ Patrimônio Líquido de abertura (primeiro lançamento registrado).
+  const dataAbertura = primeiroLancamento?.data ?? null;
+  const balancoHoje = await getBalanco(supabase, currentOrgId, hoje);
+  const balancoAbertura = dataAbertura ? await getBalanco(supabase, currentOrgId, dataAbertura) : null;
+  const plAbertura = balancoAbertura?.patrimonioLiquido ?? 0;
+  const roiPeriodo = plAbertura ? resultado / plAbertura : null;
+  const endividamento = balancoHoje.patrimonioLiquido ? balancoHoje.passivoTotal / balancoHoje.patrimonioLiquido : 0;
+  const liquidezCorrente = balancoHoje.passivoCirculante ? balancoHoje.ativoCirculante / balancoHoje.passivoCirculante : null;
+  const caixaTotal = balancoHoje.contasAtivoCirculante
+    .filter((c) => c.name.toLowerCase().includes("caixa"))
+    .reduce((acc, c) => acc + c.saldo, 0);
+  const liquidezImediata = balancoHoje.ativoTotal ? caixaTotal / balancoHoje.ativoTotal : 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -59,7 +103,7 @@ export default async function CarteiraPage() {
           <h1 className="text-xl font-semibold text-slate-900">Carteira &amp; Índices</h1>
           <p className="text-sm text-slate-500">Concentração, rentabilidade e risco da carteira de investimentos.</p>
         </div>
-        {canWrite(currentMembership.role) && (
+        {podeEscrever && (
           <div className="shrink-0 flex items-center gap-2">
             <Link
               href="/carteira/migrar"
@@ -79,7 +123,7 @@ export default async function CarteiraPage() {
         )}
       </div>
 
-      {canWrite(currentMembership.role) && (
+      {podeEscrever && (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="text-sm font-medium text-slate-900 mb-3">Novo ativo</h2>
           <NovoAtivoForm />
@@ -88,12 +132,33 @@ export default async function CarteiraPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Carteira Total" value={fmtMoney(total, currency)} />
-        <Stat label="ROA (resultado/ativo)" value={`${(roa * 100).toFixed(2)}%`} />
+        <Stat label="ROA / ROE (anualizado)" value={`${(roa * 100).toFixed(2)}%`} sub="ROE = ROA (sem passivo exigível)" />
         <Stat label="Taxa média ponderada" value={`${(taxaMedia * 100).toFixed(2)}% a.a.`} />
         <Stat
           label="Concentração (HHI)"
           value={hhiValue.toFixed(0)}
           sub={<span className={concentracao.tone}>{concentracao.label}</span>}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Prazo médio ponderado" value={`${prazoMedio.toFixed(2)} anos`} />
+        <Stat label="Exposição a CLNs" value={`${(expCln.pct * 100).toFixed(1)}%`} sub={fmtMoney(expCln.valor, currency)} />
+        <Stat label="Exposição risco-país Brasil" value={`${(expBrasil.pct * 100).toFixed(1)}%`} sub={fmtMoney(expBrasil.valor, currency)} />
+        <Stat label="Liquidez imediata (caixa/ativo)" value={`${(liquidezImediata * 100).toFixed(2)}%`} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat
+          label="ROI do período"
+          value={roiPeriodo != null ? `${(roiPeriodo * 100).toFixed(2)}%` : "—"}
+          sub={dataAbertura ? `desde ${new Date(`${dataAbertura}T00:00:00Z`).toLocaleDateString("pt-BR")}` : undefined}
+        />
+        <Stat label="Margem financeira líquida" value={`${(margemFinanceira * 100).toFixed(1)}%`} sub="resultado ÷ receita financeira bruta" />
+        <Stat label="Índice de endividamento" value={`${(endividamento * 100).toFixed(2)}%`} sub="passivo ÷ patrimônio líquido" />
+        <Stat
+          label="Liquidez corrente"
+          value={liquidezCorrente != null ? liquidezCorrente.toFixed(2) : "N/A (sem passivo)"}
         />
       </div>
 
@@ -138,9 +203,9 @@ export default async function CarteiraPage() {
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <h2 className="text-sm font-medium text-slate-900 mb-3">Top 5 maiores posições</h2>
+          <h2 className="text-sm font-medium text-slate-900 mb-3">Top 10 maiores posições</h2>
           <ul className="space-y-2 text-sm">
-            {top5.map((a) => (
+            {top10.map((a) => (
               <li key={a.nome} className="flex items-center justify-between">
                 <span className="text-slate-700">{a.nome}</span>
                 <span className="text-slate-900 font-medium">
@@ -148,59 +213,104 @@ export default async function CarteiraPage() {
                 </span>
               </li>
             ))}
-            {top5.length === 0 && <p className="text-slate-400">Nenhum ativo cadastrado.</p>}
+            {top10.length === 0 && <p className="text-slate-400">Nenhum ativo cadastrado.</p>}
           </ul>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <h2 className="text-sm font-medium text-slate-900 mb-3">Distribuição por grupo de emissor/setor</h2>
+          <ul className="space-y-2 text-sm">
+            {porGrupo.map((g) => (
+              <li key={g.grupo} className="flex items-center justify-between">
+                <span className="text-slate-700">{g.grupo}</span>
+                <span className="text-slate-900 font-medium">
+                  {fmtMoney(g.valor, currency)} ({(g.pct * 100).toFixed(1)}%)
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <h2 className="text-sm font-medium text-slate-900 mb-3">Distribuição por faixa de vencimento</h2>
+          <ul className="space-y-2 text-sm">
+            {porVencimento.map((f) => (
+              <li key={f.label} className="flex items-center justify-between">
+                <span className="text-slate-700">{f.label}</span>
+                <span className="text-slate-900 font-medium">
+                  {fmtMoney(f.valor, currency)} ({(f.pct * 100).toFixed(1)}%)
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <AnaliseCarteira ativos={ativos} currency={currency} analises={analises} podeEscrever={podeEscrever} />
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-sm font-medium text-slate-700">
           Todos os ativos
         </div>
-        <table className="w-full text-sm">
-          <thead className="text-xs text-slate-500 uppercase">
-            <tr>
-              <th className="text-left px-4 py-2">Nome</th>
-              <th className="text-left px-4 py-2">Custodiante</th>
-              <th className="text-right px-4 py-2">Valor</th>
-              <th></th>
-              <th className="text-right px-4 py-2">Cupom</th>
-              <th className="text-right px-4 py-2">Vencimento</th>
-              {canWrite(currentMembership.role) && <th></th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {ativos.map((a) => (
-              <tr key={a.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2 text-slate-800">{a.nome}</td>
-                <td className="px-4 py-2 text-slate-500">{a.custodiante ?? "—"}</td>
-                <td className="px-4 py-2 text-right text-slate-900">{fmtMoney(Number(a.valor_atual), currency)}</td>
-                <td className="px-4 py-1">
-                  {a.sincronizado && (
-                    <span
-                      title="Valor sincronizado ao vivo com o saldo da conta vinculada no Plano de Contas"
-                      className="inline-block text-[10px] leading-none px-1.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    >
-                      contábil
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-right text-slate-500">
-                  {a.taxa_cupom ? `${(Number(a.taxa_cupom) * 100).toFixed(3)}%` : "—"}
-                </td>
-                <td className="px-4 py-2 text-right text-slate-500">{a.data_vencimento ?? "—"}</td>
-                {canWrite(currentMembership.role) && (
-                  <td className="px-4 py-2 text-right">
-                    <form action={deleteAtivoAction}>
-                      <input type="hidden" name="id" value={a.id} />
-                      <button className="text-slate-400 hover:text-red-600 text-xs">remover</button>
-                    </form>
-                  </td>
-                )}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-slate-500 uppercase">
+              <tr>
+                <th className="text-left px-4 py-2">Nome</th>
+                <th className="text-left px-4 py-2">Custodiante</th>
+                <th className="text-right px-4 py-2">Valor</th>
+                <th></th>
+                <th className="text-right px-4 py-2">% Carteira</th>
+                <th className="text-right px-4 py-2">Cupom</th>
+                <th className="text-right px-4 py-2">Vencimento</th>
+                <th className="text-right px-4 py-2">Prazo</th>
+                {podeEscrever && <th></th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {ativos.map((a) => {
+                const valor = Number(a.valor_atual);
+                const pct = total ? valor / total : 0;
+                const prazoAnos = a.data_vencimento ? diasParaVencimento(a.data_vencimento) / 365 : null;
+                return (
+                  <tr key={a.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 text-slate-800">{a.nome}</td>
+                    <td className="px-4 py-2 text-slate-500">{a.custodiante ?? "—"}</td>
+                    <td className="px-4 py-2 text-right text-slate-900">{fmtMoney(valor, currency)}</td>
+                    <td className="px-4 py-1">
+                      {a.sincronizado && (
+                        <span
+                          title="Valor sincronizado ao vivo com o saldo da conta vinculada no Plano de Contas"
+                          className="inline-block text-[10px] leading-none px-1.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        >
+                          contábil
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-500">{(pct * 100).toFixed(1)}%</td>
+                    <td className="px-4 py-2 text-right text-slate-500">
+                      {a.taxa_cupom ? `${(Number(a.taxa_cupom) * 100).toFixed(3)}%` : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-500">{a.data_vencimento ?? "—"}</td>
+                    <td className="px-4 py-2 text-right text-slate-500">
+                      {prazoAnos != null ? `${prazoAnos.toFixed(1)}a` : "—"}
+                    </td>
+                    {podeEscrever && (
+                      <td className="px-4 py-2 text-right">
+                        <form action={deleteAtivoAction}>
+                          <input type="hidden" name="id" value={a.id} />
+                          <button className="text-slate-400 hover:text-red-600 text-xs">remover</button>
+                        </form>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -211,7 +321,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: React
     <div className="bg-white border border-slate-200 rounded-xl p-4">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="text-2xl font-semibold mt-1 text-slate-900">{value}</p>
-      {sub && <p className="text-xs mt-1">{sub}</p>}
+      {sub && <p className="text-xs mt-1 text-slate-400">{sub}</p>}
     </div>
   );
 }
