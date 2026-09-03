@@ -76,10 +76,10 @@ export default async function AjustesPage() {
         </p>
         <p>
           O cálculo interno (30/360) é calculado papel a papel a partir do cadastro de cada Ativo e
-          somado por grupo, apenas para comparação/justificativa da política — CLNs sem cronograma
-          de cupom periódico (acruo contínuo desde a aplicação) não entram nessa soma, pois não há
-          um cálculo interno independente confiável para eles; o valor do extrato é usado
-          diretamente.
+          somado por grupo, apenas para comparação/justificativa da política. Papéis com cronograma
+          de cupom periódico acruam desde o último pagamento; CLNs sem cronograma (acruo contínuo)
+          acruam desde a data de início da aplicação. Em ambos os casos o valor é só uma referência —
+          quem é lançado na contabilidade é sempre o valor informado pelo extrato do banco/custodiante.
         </p>
       </div>
 

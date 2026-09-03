@@ -24,9 +24,10 @@ function somarSaldo(saldos: { conta_code: string; saldo: number }[], codigos: st
  * somar mais de uma conta, quando o grupo compartilha um pool de contas) e — quando há diferença —
  * gera automaticamente o lançamento de ajuste entre a conta de acruo e a conta de receita
  * correspondente (a primeira de cada lista, quando o grupo tem mais de uma). Também calcula, quando
- * o grupo tem Ativos cadastrados com o detalhamento necessário (valor face, taxa, cronograma), a
- * soma do cálculo interno papel a papel (30/360) só para comparação/justificativa — o valor
- * efetivamente reconhecido na contabilidade é sempre o do extrato do banco.
+ * o grupo tem Ativos cadastrados com o detalhamento necessário (valor face, taxa, cronograma ou
+ * data de início da aplicação), a soma do cálculo interno papel a papel (30/360) de todos os papéis
+ * de renda fixa do grupo, só para comparação/justificativa — o valor efetivamente reconhecido na
+ * contabilidade é sempre o do extrato do banco.
  */
 export async function registrarAjusteAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
@@ -54,8 +55,9 @@ export async function registrarAjusteAction(_prev: ActionState, formData: FormDa
   const saldoAtual = somarSaldo(saldos, contaAcruoCode);
 
   // Cálculo interno papel a papel: soma o acruo calculado de todos os Ativos cadastrados
-  // neste grupo (grupo_acruo_nome). Ativos de categoria "continuo" (sem cronograma, ex.
-  // alguns CLNs) não entram na soma — para eles não há cálculo interno independente.
+  // neste grupo (grupo_acruo_nome), incluindo os de categoria "continuo" (ex. CLNs sem
+  // cronograma, calculados desde a data de início da aplicação). Serve só de comparação —
+  // o valor lançado continua sendo sempre o do extrato do banco.
   let acruoCalculadoInterno: number | null = null;
   const { data: ativosGrupo } = await supabase
     .from("ativos")

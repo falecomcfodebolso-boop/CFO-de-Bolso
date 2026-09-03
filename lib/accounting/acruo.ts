@@ -63,14 +63,12 @@ export function calcularAcruoInterno(ativo: AtivoAcruo, dataBaseISO: string): Re
     return { dias: null, valor: 0, taxaEfetiva: null };
   }
 
-  if (categoria === "continuo") {
-    // Sem cronograma de cupom periódico — não há um cálculo interno
-    // independente confiável; o valor reconhecido é sempre o do extrato.
-    return { dias: null, valor: null, taxaEfetiva: null };
-  }
-
-  if (categoria === "periodico") {
-    const dataBaseCalc = ativo.data_pagamento_anterior;
+  if (categoria === "periodico" || categoria === "continuo") {
+    // "periodico": acrua desde o último pagamento de cupom.
+    // "continuo" (ex.: CLNs sem cronograma de cupom): acrua desde o início da
+    // aplicação. Em ambos os casos este é só um cálculo de referência (30/360) —
+    // a contabilização segue sempre o valor do extrato do banco/custodiante.
+    const dataBaseCalc = categoria === "continuo" ? ativo.data_inicio_acruo : ativo.data_pagamento_anterior;
     if (!dataBaseCalc || !ativo.valor_face) return { dias: null, valor: null, taxaEfetiva: null };
     const taxaEfetiva =
       ativo.tipo_taxa === "flutuante"
@@ -87,7 +85,7 @@ export function calcularAcruoInterno(ativo: AtivoAcruo, dataBaseISO: string): Re
 
 export const CATEGORIA_ACRUO_LABEL: Record<CategoriaAcruo, string> = {
   periodico: "Cronograma periódico",
-  continuo: "Contínuo (sem cronograma) — usa valor do extrato",
+  continuo: "Contínuo desde a aplicação (comparativo — contabilização segue o extrato)",
   mercado: "Marcado a mercado — sem acruo",
   defaulted: "Em default — sem acruo",
   desconto: "Discount note — sem acruo tradicional",
