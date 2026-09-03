@@ -2,6 +2,7 @@ import { requireOrgContext, canWrite } from "@/lib/org";
 import { deleteAjusteAction } from "./actions";
 import { NovoAjusteForm } from "./novo-ajuste-form";
 import { fmtMoney } from "@/lib/format";
+import { calcularAcruoInterno, CATEGORIA_ACRUO_LABEL, type AtivoAcruo } from "@/lib/accounting/acruo";
 
 export default async function AjustesPage() {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
@@ -11,8 +12,12 @@ export default async function AjustesPage() {
     supabase.from("plano_de_contas").select("code, name").eq("org_id", currentOrgId).order("code"),
     supabase
       .from("ativos")
-      .select("id, nome, taxa_cupom, conta_code")
+      .select(
+        "id, nome, valor_face, taxa_cupom, categoria_acruo, tipo_taxa, spread_taxa, taxa_referencia_atual, indice_referencia, data_pagamento_anterior, data_inicio_acruo, pendente_custodiante, conta_acruo_code, conta_receita_code, grupo_acruo_nome"
+      )
       .eq("org_id", currentOrgId)
+      .not("grupo_acruo_nome", "is", null)
+      .order("grupo_acruo_nome")
       .order("nome"),
     supabase
       .from("ajustes_acruo")
@@ -23,8 +28,31 @@ export default async function AjustesPage() {
   ]);
 
   const contas = contasData ?? [];
-  const ativos = ativosData ?? [];
+  const ativos = (ativosData ?? []) as AtivoAcruo[];
   const ajustes = ajustesData ?? [];
+
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  // Agrupa os ativos cadastrados por grupo de acruo, calculando o cálculo interno papel a
+  // papel de cada um (referência: hoje) e o subtotal do grupo.
+  const grupos = new Map<
+    string,
+    { contaAcruo: string; contaReceita: string; itens: (AtivoAcruo & { dias: number | null; valorCalc: number | null })[] }
+  >();
+  for (const a of ativos) {
+    if (!a.grupo_acruo_nome || !a.conta_acruo_code || !a.conta_receita_code) continue;
+    const r = calcularAcruoInterno(a, hoje);
+    if (!grupos.has(a.grupo_acruo_nome)) {
+      grupos.set(a.grupo_acruo_nome, { contaAcruo: a.conta_acruo_code, contaReceita: a.conta_receita_code, itens: [] });
+    }
+    grupos.get(a.grupo_acruo_nome)!.itens.push({ ...a, dias: r.dias, valorCalc: r.valor });
+  }
+
+  const gruposParaForm = Array.from(grupos.entries()).map(([nome, g]) => ({
+    nome,
+    contaAcruo: g.contaAcruo,
+    contaReceita: g.contaReceita,
+  }));
 
   return (
     <div className="space-y-6">
@@ -33,8 +61,8 @@ export default async function AjustesPage() {
         <p className="text-sm text-slate-500 mt-1">
           Reconhecimento de receitas e despesas acruadas — compare o saldo já lançado na
           contabilidade com o valor informado pelo extrato/valuation statement do banco ou
-          custodiante e, opcionalmente, com uma estimativa interna, gerando automaticamente o
-          lançamento de ajuste (variação do acruo) quando houver diferença.
+          custodiante e, opcionalmente, com o cálculo interno papel a papel, gerando
+          automaticamente o lançamento de ajuste (variação do acruo) quando houver diferença.
         </p>
       </div>
 
@@ -42,23 +70,94 @@ export default async function AjustesPage() {
         <p className="font-medium text-slate-700">Política de reconhecimento adotada</p>
         <p>
           O valor reportado pelo banco/custodiante na data-base é a fonte oficial do acruo — é ele
-          que é registrado na contabilidade (não um cálculo interno). O lançamento gerado reflete a
+          que é registrado na contabilidade (não o cálculo interno). O lançamento gerado reflete a
           <strong> variação</strong> do acruo no período (diferença entre o saldo contábil atual da
-          conta de acruo e o valor informado pelo extrato), líquida de eventuais recebimentos.
+          conta de acruo e o valor informado pelo extrato).
         </p>
         <p>
-          Quando o ativo tiver uma taxa de cupom cadastrada, esta tela também calcula, apenas para
-          fins de comparação/justificativa da política, uma estimativa interna simplificada
-          (regime de competência, base 360 dias corridos: principal × taxa de cupom anual × dias
-          corridos desde a última apuração ÷ 360). Essa estimativa é aproximada e não substitui o
-          valor do extrato.
+          O cálculo interno (30/360) é calculado papel a papel a partir do cadastro de cada Ativo e
+          somado por grupo, apenas para comparação/justificativa da política — CLNs sem cronograma
+          de cupom periódico (acruo contínuo desde a aplicação) não entram nessa soma, pois não há
+          um cálculo interno independente confiável para eles; o valor do extrato é usado
+          diretamente.
         </p>
       </div>
+
+      {grupos.size > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Detalhamento por papel <span className="font-normal text-slate-400">(referência: hoje)</span>
+          </h2>
+          {Array.from(grupos.entries()).map(([nomeGrupo, g]) => {
+            const subtotal = g.itens.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+            return (
+              <div key={nomeGrupo} className="rounded-lg border border-slate-200 overflow-x-auto">
+                <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-medium text-slate-700 flex items-baseline justify-between">
+                  <span>{nomeGrupo}</span>
+                  <span className="text-xs text-slate-400 font-normal">
+                    conta(s): {g.contaAcruo} · receita: {g.contaReceita}
+                  </span>
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="text-slate-500 text-xs uppercase">
+                    <tr>
+                      <th className="text-left px-3 py-2">Papel</th>
+                      <th className="text-left px-3 py-2">Categoria</th>
+                      <th className="text-right px-3 py-2">Valor Face</th>
+                      <th className="text-right px-3 py-2">Taxa</th>
+                      <th className="text-right px-3 py-2">Dias</th>
+                      <th className="text-right px-3 py-2">Cálculo Interno</th>
+                      <th className="text-left px-3 py-2">Obs.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.itens.map((i) => {
+                      const taxaEfetiva =
+                        i.tipo_taxa === "flutuante"
+                          ? (i.taxa_referencia_atual ?? 0) + (i.spread_taxa ?? 0)
+                          : i.taxa_cupom;
+                      return (
+                        <tr key={i.id} className="border-t border-slate-100">
+                          <td className="px-3 py-2">{i.nome}</td>
+                          <td className="px-3 py-2 text-slate-500">
+                            {i.categoria_acruo ? CATEGORIA_ACRUO_LABEL[i.categoria_acruo] : "—"}
+                          </td>
+                          <td className="px-3 py-2 text-right">{i.valor_face != null ? fmtMoney(i.valor_face) : "—"}</td>
+                          <td className="px-3 py-2 text-right">
+                            {taxaEfetiva != null ? `${(taxaEfetiva * 100).toFixed(3)}%` : "—"}
+                            {i.tipo_taxa === "flutuante" && (
+                              <span className="text-xs text-slate-400"> ({i.indice_referencia})</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">{i.dias ?? "—"}</td>
+                          <td className="px-3 py-2 text-right font-medium">
+                            {i.valorCalc != null ? fmtMoney(i.valorCalc) : "— (usa extrato)"}
+                          </td>
+                          <td className="px-3 py-2 text-slate-400 text-xs">
+                            {i.pendente_custodiante ? "Pending no custodiante" : ""}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="border-t border-slate-200 bg-slate-50 font-semibold">
+                      <td className="px-3 py-2" colSpan={5}>
+                        Subtotal {nomeGrupo}
+                      </td>
+                      <td className="px-3 py-2 text-right">{fmtMoney(subtotal)}</td>
+                      <td></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {podeEscrever && (
         <div className="rounded-lg border border-slate-200 p-4">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Nova apuração</h2>
-          <NovoAjusteForm contas={contas} ativos={ativos} />
+          <NovoAjusteForm contas={contas} grupos={gruposParaForm} />
         </div>
       )}
 
