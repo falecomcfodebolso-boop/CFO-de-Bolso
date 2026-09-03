@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDMPL } from "@/lib/accounting/demonstrativos";
-import { fmtMoney } from "@/lib/format";
+import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
 import { ExportButtons } from "../export-buttons";
+import { TabelaComparativa } from "../tabela-comparativa";
 
 function inicioDoAno() {
   return `${new Date().getFullYear()}-01-01`;
@@ -14,15 +15,40 @@ function hoje() {
 export default async function DmplPage({
   searchParams,
 }: {
-  searchParams: Promise<{ inicio?: string; fim?: string }>;
+  searchParams: Promise<{ inicio?: string; fim?: string; inicioAnt?: string; fimAnt?: string; comparar?: string }>;
 }) {
-  const { inicio: inicioParam, fim: fimParam } = await searchParams;
+  const { inicio: inicioParam, fim: fimParam, inicioAnt: inicioAntParam, fimAnt: fimAntParam, comparar: compararParam } =
+    await searchParams;
   const inicio = inicioParam || inicioDoAno();
   const fim = fimParam || hoje();
+  const comparar = compararParam !== "0";
+
+  const anteriorPadrao = periodoAnterior(inicio, fim);
+  const inicioAnt = inicioAntParam || anteriorPadrao.inicio;
+  const fimAnt = fimAntParam || anteriorPadrao.fim;
 
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
-  const dmpl = await getDMPL(supabase, currentOrgId, inicio, fim);
+  const [dmpl, dmplAnt] = await Promise.all([
+    getDMPL(supabase, currentOrgId, inicio, fim),
+    comparar ? getDMPL(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
+  ]);
+
+  const linhasResumo: LinhaAnalise[] = [
+    { label: "Saldo Inicial", valor: dmpl.saldoInicial, valorAnterior: dmplAnt?.saldoInicial },
+    { label: "(+) Aportes de Capital", valor: dmpl.aportes, valorAnterior: dmplAnt?.aportes, indent: true },
+    { label: "(–) Distribuições / Retiradas", valor: dmpl.distribuicoes, valorAnterior: dmplAnt?.distribuicoes, indent: true },
+    { label: "(+/–) Resultado do Período", valor: dmpl.resultadoPeriodo, valorAnterior: dmplAnt?.resultadoPeriodo, indent: true },
+    { label: "Saldo Final", valor: dmpl.saldoFinal, valorAnterior: dmplAnt?.saldoFinal, destaque: true },
+  ];
+
+  const contasAntPorCodigo = new Map((dmplAnt?.contas ?? []).map((c) => [c.code, c]));
+  const linhasContas: LinhaAnalise[] = dmpl.contas.map((c) => ({
+    key: c.code,
+    label: `${c.code} — ${c.name}`,
+    valor: c.saldoFinal,
+    valorAnterior: contasAntPorCodigo.get(c.code)?.saldoFinal ?? null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -40,102 +66,52 @@ export default async function DmplPage({
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
         <div>
           <label className="block text-xs text-slate-500 mb-1">Início</label>
-          <input
-            type="date"
-            name="inicio"
-            defaultValue={inicio}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          />
+          <input type="date" name="inicio" defaultValue={inicio} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-slate-500 mb-1">Fim</label>
-          <input
-            type="date"
-            name="fim"
-            defaultValue={fim}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          />
+          <input type="date" name="fim" defaultValue={fim} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <div className="w-full h-px bg-slate-100 my-1" />
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="comparar" value="1" defaultChecked={comparar} className="rounded border-slate-300" />
+          Comparar com outro período (análise horizontal)
+        </label>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Início (comparação)</label>
+          <input type="date" name="inicioAnt" defaultValue={inicioAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Fim (comparação)</label>
+          <input type="date" name="fimAnt" defaultValue={fimAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
           Atualizar
         </button>
       </form>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <tbody className="divide-y divide-slate-100">
-            <tr>
-              <td className="px-4 py-2.5 text-slate-800">Saldo Inicial</td>
-              <td className="px-4 py-2.5 text-right font-mono text-slate-900">
-                {fmtMoney(dmpl.saldoInicial, currency)}
-              </td>
-            </tr>
-            <tr>
-              <td className="px-4 py-2.5 text-slate-500 pl-8">(+) Aportes de Capital</td>
-              <td className="px-4 py-2.5 text-right font-mono text-slate-900">{fmtMoney(dmpl.aportes, currency)}</td>
-            </tr>
-            <tr>
-              <td className="px-4 py-2.5 text-slate-500 pl-8">(–) Distribuições / Retiradas</td>
-              <td className="px-4 py-2.5 text-right font-mono text-red-600">
-                {fmtMoney(dmpl.distribuicoes, currency)}
-              </td>
-            </tr>
-            <tr>
-              <td className="px-4 py-2.5 text-slate-500 pl-8">(+/–) Resultado do Período</td>
-              <td
-                className={`px-4 py-2.5 text-right font-mono ${
-                  dmpl.resultadoPeriodo < 0 ? "text-red-600" : "text-slate-900"
-                }`}
-              >
-                {fmtMoney(dmpl.resultadoPeriodo, currency)}
-              </td>
-            </tr>
-            <tr className="bg-slate-50">
-              <td className="px-4 py-2.5 text-slate-900 font-semibold">Saldo Final</td>
-              <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">
-                {fmtMoney(dmpl.saldoFinal, currency)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <TabelaComparativa
+        linhas={linhasResumo}
+        baseAV={dmpl.saldoFinal}
+        baseAVAnterior={dmplAnt?.saldoFinal ?? 0}
+        currency={currency}
+        comparar={comparar}
+        labelBaseAV="o Saldo Final do PL"
+      />
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-sm font-medium text-slate-700">
-          Movimentação por conta do Patrimônio Líquido
-        </div>
-        {dmpl.contas.length === 0 ? (
-          <p className="text-sm text-slate-400 px-4 py-3">Nenhuma movimentação em contas de PL nesse período.</p>
+      <div>
+        <h2 className="text-sm font-medium text-slate-700 mb-2">Movimentação por conta do Patrimônio Líquido</h2>
+        {linhasContas.length === 0 ? (
+          <p className="text-sm text-slate-400">Nenhuma movimentação em contas de PL nesse período.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-              <tr>
-                <th className="text-left px-4 py-2">Conta</th>
-                <th className="text-right px-4 py-2">Saldo Inicial</th>
-                <th className="text-right px-4 py-2">Movimento</th>
-                <th className="text-right px-4 py-2">Saldo Final</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {dmpl.contas.map((c) => (
-                <tr key={c.code} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 text-slate-800">
-                    <span className="font-mono text-xs text-slate-400 mr-2">{c.code}</span>
-                    {c.name}
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono text-slate-700">
-                    {fmtMoney(c.saldoInicial, currency)}
-                  </td>
-                  <td className={`px-4 py-2 text-right font-mono ${c.movimento < 0 ? "text-red-600" : "text-slate-700"}`}>
-                    {fmtMoney(c.movimento, currency)}
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono font-medium text-slate-900">
-                    {fmtMoney(c.saldoFinal, currency)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <TabelaComparativa
+            linhas={linhasContas}
+            baseAV={dmpl.saldoFinal}
+            baseAVAnterior={dmplAnt?.saldoFinal ?? 0}
+            currency={currency}
+            comparar={comparar}
+            labelBaseAV="o Saldo Final do PL"
+          />
         )}
       </div>
     </div>

@@ -1,50 +1,102 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getBalanco, type ContaSaldo } from "@/lib/accounting/demonstrativos";
+import { dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
 import { fmtMoney } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
+import { TabelaComparativa } from "../tabela-comparativa";
 
 function hoje() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function Bloco({ titulo, contas, total, currency }: { titulo: string; contas: ContaSaldo[]; total: number; currency: string }) {
-  return (
-    <div>
-      <div className="flex justify-between text-xs font-medium text-slate-500 uppercase px-4 py-1.5">
-        <span>{titulo}</span>
-        <span>{fmtMoney(total, currency)}</span>
-      </div>
-      {contas.length === 0 ? (
-        <p className="text-sm text-slate-400 px-4 py-1.5">Sem saldo.</p>
-      ) : (
-        contas.map((c) => (
-          <div key={c.code} className="flex justify-between text-sm px-4 py-1">
-            <span className="text-slate-700">
-              <span className="font-mono text-xs text-slate-400 mr-2">{c.code}</span>
-              {c.name}
-            </span>
-            <span className="font-mono text-slate-900">{fmtMoney(c.saldo, currency)}</span>
-          </div>
-        ))
-      )}
-    </div>
-  );
+function linhasDoBloco(
+  titulo: string,
+  contas: ContaSaldo[],
+  total: number,
+  contasAnt: ContaSaldo[],
+  totalAnt: number | null
+): LinhaAnalise[] {
+  const antPorCodigo = new Map(contasAnt.map((c) => [c.code, c]));
+  const linhas: LinhaAnalise[] = contas.map((c) => ({
+    key: c.code,
+    label: `${c.code} — ${c.name}`,
+    valor: c.saldo,
+    valorAnterior: antPorCodigo.get(c.code)?.saldo ?? null,
+    indent: true,
+  }));
+  linhas.push({ key: `${titulo}-total`, label: `Total ${titulo}`, valor: total, valorAnterior: totalAnt, subtotal: true });
+  return linhas;
 }
 
 export default async function BalancoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string }>;
+  searchParams: Promise<{ data?: string; dataAnt?: string; comparar?: string }>;
 }) {
-  const { data: dataParam } = await searchParams;
+  const { data: dataParam, dataAnt: dataAntParam, comparar: compararParam } = await searchParams;
   const data = dataParam || hoje();
+  const comparar = compararParam !== "0";
+  const dataAnt = dataAntParam || dataComparacaoPadrao(data);
 
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
-  const b = await getBalanco(supabase, currentOrgId, data);
+  const [b, bAnt] = await Promise.all([
+    getBalanco(supabase, currentOrgId, data),
+    comparar ? getBalanco(supabase, currentOrgId, dataAnt) : Promise.resolve(null),
+  ]);
 
   const fecha = Math.abs(b.diferenca) < 0.01;
+
+  const linhasAtivo: LinhaAnalise[] = [
+    ...linhasDoBloco(
+      "Ativo Circulante",
+      b.contasAtivoCirculante,
+      b.ativoCirculante,
+      bAnt?.contasAtivoCirculante ?? [],
+      bAnt?.ativoCirculante ?? null
+    ),
+    ...linhasDoBloco(
+      "Ativo Não Circulante",
+      b.contasAtivoNaoCirculante,
+      b.ativoNaoCirculante,
+      bAnt?.contasAtivoNaoCirculante ?? [],
+      bAnt?.ativoNaoCirculante ?? null
+    ),
+    { key: "ativo-total", label: "= ATIVO TOTAL", valor: b.ativoTotal, valorAnterior: bAnt?.ativoTotal, destaque: true },
+  ];
+
+  const linhasPassivoPl: LinhaAnalise[] = [
+    ...linhasDoBloco(
+      "Passivo Circulante",
+      b.contasPassivoCirculante,
+      b.passivoCirculante,
+      bAnt?.contasPassivoCirculante ?? [],
+      bAnt?.passivoCirculante ?? null
+    ),
+    ...linhasDoBloco(
+      "Passivo Não Circulante",
+      b.contasPassivoNaoCirculante,
+      b.passivoNaoCirculante,
+      bAnt?.contasPassivoNaoCirculante ?? [],
+      bAnt?.passivoNaoCirculante ?? null
+    ),
+    ...linhasDoBloco("Patrimônio Líquido", b.contasPl, b.capitalEReservas, bAnt?.contasPl ?? [], bAnt?.capitalEReservas ?? null),
+    {
+      key: "resultado-exercicio",
+      label: "Resultado do Exercício (ainda não fechado)",
+      valor: b.resultadoDoExercicio,
+      valorAnterior: bAnt?.resultadoDoExercicio,
+      indent: true,
+    },
+    {
+      key: "passivo-pl-total",
+      label: "= PASSIVO + PATRIMÔNIO LÍQUIDO",
+      valor: b.passivoMaisPl,
+      valorAnterior: bAnt?.passivoMaisPl,
+      destaque: true,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -62,60 +114,44 @@ export default async function BalancoPage({
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
         <div>
           <label className="block text-xs text-slate-500 mb-1">Data de referência</label>
-          <input
-            type="date"
-            name="data"
-            defaultValue={data}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          />
+          <input type="date" name="data" defaultValue={data} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <div className="w-full h-px bg-slate-100 my-1" />
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="comparar" value="1" defaultChecked={comparar} className="rounded border-slate-300" />
+          Comparar com outra data (análise horizontal)
+        </label>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Data de comparação</label>
+          <input type="date" name="dataAnt" defaultValue={dataAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
           Atualizar
         </button>
       </form>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between text-sm font-semibold text-slate-900">
-            <span>Ativo</span>
-            <span>{fmtMoney(b.ativoTotal, currency)}</span>
-          </div>
-          <div className="divide-y divide-slate-50 py-1">
-            <Bloco titulo="Circulante" contas={b.contasAtivoCirculante} total={b.ativoCirculante} currency={currency} />
-            <Bloco
-              titulo="Não Circulante"
-              contas={b.contasAtivoNaoCirculante}
-              total={b.ativoNaoCirculante}
-              currency={currency}
-            />
-          </div>
-        </div>
+      <div>
+        <h2 className="text-sm font-medium text-slate-700 mb-2">Ativo</h2>
+        <TabelaComparativa
+          linhas={linhasAtivo}
+          baseAV={b.ativoTotal}
+          baseAVAnterior={bAnt?.ativoTotal ?? 0}
+          currency={currency}
+          comparar={comparar}
+          labelBaseAV="o Ativo Total"
+        />
+      </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between text-sm font-semibold text-slate-900">
-            <span>Passivo + Patrimônio Líquido</span>
-            <span>{fmtMoney(b.passivoMaisPl, currency)}</span>
-          </div>
-          <div className="divide-y divide-slate-50 py-1">
-            <Bloco
-              titulo="Passivo Circulante"
-              contas={b.contasPassivoCirculante}
-              total={b.passivoCirculante}
-              currency={currency}
-            />
-            <Bloco
-              titulo="Passivo Não Circulante"
-              contas={b.contasPassivoNaoCirculante}
-              total={b.passivoNaoCirculante}
-              currency={currency}
-            />
-            <Bloco titulo="Patrimônio Líquido" contas={b.contasPl} total={b.capitalEReservas} currency={currency} />
-            <div className="flex justify-between text-sm px-4 py-1 italic">
-              <span className="text-slate-500">Resultado do Exercício (ainda não fechado)</span>
-              <span className="font-mono text-slate-700">{fmtMoney(b.resultadoDoExercicio, currency)}</span>
-            </div>
-          </div>
-        </div>
+      <div>
+        <h2 className="text-sm font-medium text-slate-700 mb-2">Passivo + Patrimônio Líquido</h2>
+        <TabelaComparativa
+          linhas={linhasPassivoPl}
+          baseAV={b.passivoMaisPl}
+          baseAVAnterior={bAnt?.passivoMaisPl ?? 0}
+          currency={currency}
+          comparar={comparar}
+          labelBaseAV="o Ativo Total"
+        />
       </div>
 
       <div

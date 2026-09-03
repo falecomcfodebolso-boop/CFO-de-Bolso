@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDFC } from "@/lib/accounting/demonstrativos";
-import { fmtMoney } from "@/lib/format";
+import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
 import { ExportButtons } from "../export-buttons";
+import { TabelaComparativa } from "../tabela-comparativa";
 
 function inicioDoAno() {
   return `${new Date().getFullYear()}-01-01`;
@@ -14,23 +15,39 @@ function hoje() {
 export default async function DfcPage({
   searchParams,
 }: {
-  searchParams: Promise<{ inicio?: string; fim?: string }>;
+  searchParams: Promise<{ inicio?: string; fim?: string; inicioAnt?: string; fimAnt?: string; comparar?: string }>;
 }) {
-  const { inicio: inicioParam, fim: fimParam } = await searchParams;
+  const { inicio: inicioParam, fim: fimParam, inicioAnt: inicioAntParam, fimAnt: fimAntParam, comparar: compararParam } =
+    await searchParams;
   const inicio = inicioParam || inicioDoAno();
   const fim = fimParam || hoje();
+  const comparar = compararParam !== "0";
+
+  const anteriorPadrao = periodoAnterior(inicio, fim);
+  const inicioAnt = inicioAntParam || anteriorPadrao.inicio;
+  const fimAnt = fimAntParam || anteriorPadrao.fim;
 
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
-  const dfc = await getDFC(supabase, currentOrgId, inicio, fim);
+  const [dfc, dfcAnt] = await Promise.all([
+    getDFC(supabase, currentOrgId, inicio, fim),
+    comparar ? getDFC(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
+  ]);
 
-  const linhas = [
-    { label: "Saldo Inicial de Caixa", valor: dfc.saldoInicialCaixa, destaque: true },
-    { label: "(+/–) Atividades Operacionais", valor: dfc.operacional },
-    { label: "(+/–) Atividades de Investimento", valor: dfc.investimento },
-    { label: "(+/–) Atividades de Financiamento", valor: dfc.financiamento },
-    { label: "= Variação de Caixa no Período", valor: dfc.variacaoCaixa, subtotal: true },
-    { label: "Saldo Final de Caixa", valor: dfc.saldoFinalCaixa, destaque: true },
+  // Base da análise vertical da DFC: soma dos valores absolutos dos três
+  // grupos de atividades — não há uma convenção única pra "100%" num
+  // fluxo (diferente do Ativo Total no Balanço ou da Receita na DRE), por
+  // isso usamos essa base e deixamos isso explícito na legenda da tabela.
+  const baseAV = Math.abs(dfc.operacional) + Math.abs(dfc.investimento) + Math.abs(dfc.financiamento);
+  const baseAVAnt = dfcAnt ? Math.abs(dfcAnt.operacional) + Math.abs(dfcAnt.investimento) + Math.abs(dfcAnt.financiamento) : 0;
+
+  const linhas: LinhaAnalise[] = [
+    { label: "Saldo Inicial de Caixa", valor: dfc.saldoInicialCaixa, valorAnterior: dfcAnt?.saldoInicialCaixa, destaque: true, semAV: true },
+    { label: "(+/–) Atividades Operacionais", valor: dfc.operacional, valorAnterior: dfcAnt?.operacional },
+    { label: "(+/–) Atividades de Investimento", valor: dfc.investimento, valorAnterior: dfcAnt?.investimento },
+    { label: "(+/–) Atividades de Financiamento", valor: dfc.financiamento, valorAnterior: dfcAnt?.financiamento },
+    { label: "= Variação de Caixa no Período", valor: dfc.variacaoCaixa, valorAnterior: dfcAnt?.variacaoCaixa, subtotal: true, semAV: true },
+    { label: "Saldo Final de Caixa", valor: dfc.saldoFinalCaixa, valorAnterior: dfcAnt?.saldoFinalCaixa, destaque: true, semAV: true },
   ];
 
   return (
@@ -52,47 +69,38 @@ export default async function DfcPage({
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
         <div>
           <label className="block text-xs text-slate-500 mb-1">Início</label>
-          <input
-            type="date"
-            name="inicio"
-            defaultValue={inicio}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          />
+          <input type="date" name="inicio" defaultValue={inicio} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-slate-500 mb-1">Fim</label>
-          <input
-            type="date"
-            name="fim"
-            defaultValue={fim}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          />
+          <input type="date" name="fim" defaultValue={fim} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <div className="w-full h-px bg-slate-100 my-1" />
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="comparar" value="1" defaultChecked={comparar} className="rounded border-slate-300" />
+          Comparar com outro período (análise horizontal)
+        </label>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Início (comparação)</label>
+          <input type="date" name="inicioAnt" defaultValue={inicioAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Fim (comparação)</label>
+          <input type="date" name="fimAnt" defaultValue={fimAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
           Atualizar
         </button>
       </form>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <tbody className="divide-y divide-slate-100">
-            {linhas.map((l) => (
-              <tr key={l.label} className={l.destaque ? "bg-slate-50" : ""}>
-                <td className={`px-4 py-2.5 text-slate-800 ${l.subtotal || l.destaque ? "font-medium" : ""}`}>
-                  {l.label}
-                </td>
-                <td
-                  className={`px-4 py-2.5 text-right font-mono ${l.valor < 0 ? "text-red-600" : "text-slate-900"} ${
-                    l.subtotal || l.destaque ? "font-semibold" : ""
-                  }`}
-                >
-                  {fmtMoney(l.valor, currency)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TabelaComparativa
+        linhas={linhas}
+        baseAV={baseAV}
+        baseAVAnterior={baseAVAnt}
+        currency={currency}
+        comparar={comparar}
+        labelBaseAV="a soma dos três grupos de atividades (em módulo)"
+      />
 
       <p className="text-xs text-slate-400">
         Contas de caixa são identificadas automaticamente pelo nome (ex: &ldquo;Caixa&rdquo;, &ldquo;Banco&rdquo;,

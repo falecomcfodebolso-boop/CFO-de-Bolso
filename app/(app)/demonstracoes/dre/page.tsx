@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDRE } from "@/lib/accounting/demonstrativos";
-import { fmtMoney } from "@/lib/format";
+import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
 import { ExportButtons } from "../export-buttons";
+import { TabelaComparativa } from "../tabela-comparativa";
 
 function inicioDoAno() {
   return `${new Date().getFullYear()}-01-01`;
@@ -14,30 +15,64 @@ function hoje() {
 export default async function DrePage({
   searchParams,
 }: {
-  searchParams: Promise<{ inicio?: string; fim?: string }>;
+  searchParams: Promise<{ inicio?: string; fim?: string; inicioAnt?: string; fimAnt?: string; comparar?: string }>;
 }) {
-  const { inicio: inicioParam, fim: fimParam } = await searchParams;
+  const { inicio: inicioParam, fim: fimParam, inicioAnt: inicioAntParam, fimAnt: fimAntParam, comparar: compararParam } =
+    await searchParams;
   const inicio = inicioParam || inicioDoAno();
   const fim = fimParam || hoje();
+  const comparar = compararParam !== "0";
+
+  const anteriorPadrao = periodoAnterior(inicio, fim);
+  const inicioAnt = inicioAntParam || anteriorPadrao.inicio;
+  const fimAnt = fimAntParam || anteriorPadrao.fim;
 
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
-  const dre = await getDRE(supabase, currentOrgId, inicio, fim);
+  const [dre, dreAnt] = await Promise.all([
+    getDRE(supabase, currentOrgId, inicio, fim),
+    comparar ? getDRE(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
+  ]);
 
-  const linhas: { label: string; valor: number; destaque?: boolean; subtotal?: boolean; indent?: boolean }[] = [
-    { label: "Receita Bruta", valor: dre.receitaBruta },
-    { label: "(–) Deduções da Receita", valor: -dre.deducoes, indent: true },
-    { label: "= Receita Líquida", valor: dre.receitaLiquida, subtotal: true },
-    { label: "(–) Custos", valor: -dre.custos, indent: true },
-    { label: "= Lucro Bruto", valor: dre.lucroBruto, subtotal: true },
-    { label: "(–) Despesas Operacionais", valor: -dre.despesasOperacionais, indent: true },
-    { label: "= Resultado Operacional", valor: dre.resultadoOperacional, subtotal: true },
-    { label: "(+) Receitas Financeiras", valor: dre.receitasFinanceiras, indent: true },
-    { label: "(–) Despesas Financeiras", valor: -dre.despesasFinanceiras, indent: true },
-    { label: "(+/–) Outras Receitas/Despesas", valor: dre.outras, indent: true },
-    { label: "= Resultado Antes dos Impostos", valor: dre.resultadoAntesImpostos, subtotal: true },
-    { label: "(–) Impostos sobre o Lucro", valor: -dre.impostosSobreLucro, indent: true },
-    { label: "= Lucro/Prejuízo Líquido do Período", valor: dre.lucroLiquido, destaque: true },
+  const linhas: LinhaAnalise[] = [
+    { label: "Receita Bruta", valor: dre.receitaBruta, valorAnterior: dreAnt?.receitaBruta },
+    { label: "(–) Deduções da Receita", valor: -dre.deducoes, valorAnterior: dreAnt ? -dreAnt.deducoes : null, indent: true },
+    { label: "= Receita Líquida", valor: dre.receitaLiquida, valorAnterior: dreAnt?.receitaLiquida, subtotal: true },
+    { label: "(–) Custos", valor: -dre.custos, valorAnterior: dreAnt ? -dreAnt.custos : null, indent: true },
+    { label: "= Lucro Bruto", valor: dre.lucroBruto, valorAnterior: dreAnt?.lucroBruto, subtotal: true },
+    {
+      label: "(–) Despesas Operacionais",
+      valor: -dre.despesasOperacionais,
+      valorAnterior: dreAnt ? -dreAnt.despesasOperacionais : null,
+      indent: true,
+    },
+    { label: "= Resultado Operacional", valor: dre.resultadoOperacional, valorAnterior: dreAnt?.resultadoOperacional, subtotal: true },
+    { label: "(+) Receitas Financeiras", valor: dre.receitasFinanceiras, valorAnterior: dreAnt?.receitasFinanceiras, indent: true },
+    {
+      label: "(–) Despesas Financeiras",
+      valor: -dre.despesasFinanceiras,
+      valorAnterior: dreAnt ? -dreAnt.despesasFinanceiras : null,
+      indent: true,
+    },
+    { label: "(+/–) Outras Receitas/Despesas", valor: dre.outras, valorAnterior: dreAnt?.outras, indent: true },
+    {
+      label: "= Resultado Antes dos Impostos",
+      valor: dre.resultadoAntesImpostos,
+      valorAnterior: dreAnt?.resultadoAntesImpostos,
+      subtotal: true,
+    },
+    {
+      label: "(–) Impostos sobre o Lucro",
+      valor: -dre.impostosSobreLucro,
+      valorAnterior: dreAnt ? -dreAnt.impostosSobreLucro : null,
+      indent: true,
+    },
+    {
+      label: "= Lucro/Prejuízo Líquido do Período",
+      valor: dre.lucroLiquido,
+      valorAnterior: dreAnt?.lucroLiquido,
+      destaque: true,
+    },
   ];
 
   return (
@@ -56,21 +91,24 @@ export default async function DrePage({
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
         <div>
           <label className="block text-xs text-slate-500 mb-1">Início</label>
-          <input
-            type="date"
-            name="inicio"
-            defaultValue={inicio}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          />
+          <input type="date" name="inicio" defaultValue={inicio} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-slate-500 mb-1">Fim</label>
-          <input
-            type="date"
-            name="fim"
-            defaultValue={fim}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          />
+          <input type="date" name="fim" defaultValue={fim} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <div className="w-full h-px bg-slate-100 my-1" />
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="comparar" value="1" defaultChecked={comparar} className="rounded border-slate-300" />
+          Comparar com outro período (análise horizontal)
+        </label>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Início (comparação)</label>
+          <input type="date" name="inicioAnt" defaultValue={inicioAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Fim (comparação)</label>
+          <input type="date" name="fimAnt" defaultValue={fimAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
           Atualizar
@@ -83,30 +121,14 @@ export default async function DrePage({
         </p>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <tbody className="divide-y divide-slate-100">
-            {linhas.map((l) => (
-              <tr key={l.label} className={l.destaque ? "bg-slate-50" : ""}>
-                <td
-                  className={`px-4 py-2.5 ${l.indent ? "pl-8 text-slate-500" : "text-slate-800"} ${
-                    l.subtotal || l.destaque ? "font-medium" : ""
-                  } ${l.destaque ? "text-slate-900" : ""}`}
-                >
-                  {l.label}
-                </td>
-                <td
-                  className={`px-4 py-2.5 text-right font-mono ${
-                    l.valor < 0 ? "text-red-600" : "text-slate-900"
-                  } ${l.subtotal || l.destaque ? "font-semibold" : ""}`}
-                >
-                  {fmtMoney(l.valor, currency)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TabelaComparativa
+        linhas={linhas}
+        baseAV={dre.receitaLiquida}
+        baseAVAnterior={dreAnt?.receitaLiquida ?? 0}
+        currency={currency}
+        comparar={comparar}
+        labelBaseAV="a Receita Líquida"
+      />
     </div>
   );
 }
