@@ -1,9 +1,10 @@
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { deleteAjusteAction } from "./actions";
 import { NovoAjusteForm } from "./novo-ajuste-form";
-import { fmtMoney } from "@/lib/format";
+import { fmtMoney, fmtDate } from "@/lib/format";
 import { calcularAcruoInterno, CATEGORIA_ACRUO_LABEL, type AtivoAcruo } from "@/lib/accounting/acruo";
 import { getSaldosPorConta } from "@/lib/accounting/queries";
+import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
 
 /** Soma o saldo contábil de uma lista de contas separadas por vírgula (pools compartilhados). */
 function somarSaldo(saldos: { conta_code: string; saldo: number }[], codigos: string): number {
@@ -22,7 +23,7 @@ export default async function AjustesPage({
   const podeEscrever = canWrite(currentMembership.role);
   const { data: dataParam } = await searchParams;
 
-  const [{ data: contasData }, { data: ativosData }, { data: ajustesData }, saldos] = await Promise.all([
+  const [{ data: contasData }, { data: ativosData }, { data: ajustesData }, saldos, intervalo] = await Promise.all([
     supabase.from("plano_de_contas").select("code, name").eq("org_id", currentOrgId).order("code"),
     supabase
       .from("ativos")
@@ -40,6 +41,7 @@ export default async function AjustesPage({
       .order("data_base", { ascending: false })
       .order("created_at", { ascending: false }),
     getSaldosPorConta(supabase, currentOrgId),
+    getIntervaloDeLancamentos(supabase, currentOrgId),
   ]);
 
   const contas = contasData ?? [];
@@ -47,7 +49,8 @@ export default async function AjustesPage({
   const ajustes = ajustesData ?? [];
 
   const hoje = new Date().toISOString().slice(0, 10);
-  const dataRef = dataParam || hoje;
+  const dataEscolhida = dataParam || hoje;
+  const { data: dataRef, ajustada: dataAjustada, dataOriginal } = resolverDataReferencia(dataEscolhida, intervalo);
 
   // Agrupa os ativos cadastrados por grupo de acruo, calculando o cálculo interno papel a
   // papel de cada um na data de referência selecionada (padrão: hoje) e o subtotal do grupo.
@@ -132,6 +135,16 @@ export default async function AjustesPage({
             apuração registrada para essa data — ou, na falta dela, a apuração mais recente registrada em ou
             antes dessa data (veja &ldquo;Nova apuração&rdquo; abaixo).
           </p>
+          {dataAjustada && dataOriginal && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3">
+              Não há lançamentos contábeis para {fmtDate(dataOriginal)}
+              {dataOriginal > dataRef
+                ? " (é depois do último lançamento registrado)"
+                : " (é antes do primeiro lançamento registrado)"}
+              . Mostrando o {dataOriginal > dataRef ? "último" : "primeiro"} período disponível:{" "}
+              <strong>{fmtDate(dataRef)}</strong>.
+            </div>
+          )}
           {Array.from(grupos.entries()).map(([nomeGrupo, g]) => {
             const subtotal = g.itens.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
             const itensPendentes = g.itens.filter((i) => i.pendente_custodiante);

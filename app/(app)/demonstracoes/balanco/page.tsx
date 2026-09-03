@@ -2,9 +2,10 @@ import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getBalanco, type ContaSaldo } from "@/lib/accounting/demonstrativos";
 import { dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
-import { fmtMoney } from "@/lib/format";
+import { fmtMoney, fmtDate } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
+import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
 
 function hoje() {
   return new Date().toISOString().slice(0, 10);
@@ -35,12 +36,21 @@ export default async function BalancoPage({
   searchParams: Promise<{ data?: string; dataAnt?: string; comparar?: string }>;
 }) {
   const { data: dataParam, dataAnt: dataAntParam, comparar: compararParam } = await searchParams;
-  const data = dataParam || hoje();
+  const dataEscolhida = dataParam || hoje();
   const comparar = compararParam !== "0";
-  const dataAnt = dataAntParam || dataComparacaoPadrao(data);
+  const dataAntEscolhida = dataAntParam || dataComparacaoPadrao(dataEscolhida);
 
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
+
+  const intervalo = await getIntervaloDeLancamentos(supabase, currentOrgId);
+  const { data, ajustada: dataAjustada, dataOriginal } = resolverDataReferencia(dataEscolhida, intervalo);
+  const {
+    data: dataAnt,
+    ajustada: dataAntAjustada,
+    dataOriginal: dataAntOriginal,
+  } = resolverDataReferencia(dataAntEscolhida, intervalo);
+
   const [b, bAnt] = await Promise.all([
     getBalanco(supabase, currentOrgId, data),
     comparar ? getBalanco(supabase, currentOrgId, dataAnt) : Promise.resolve(null),
@@ -129,6 +139,25 @@ export default async function BalancoPage({
           Atualizar
         </button>
       </form>
+
+      {(dataAjustada || dataAntAjustada) && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3 space-y-1">
+          {dataAjustada && dataOriginal && (
+            <p>
+              Não há dados contábeis para {fmtDate(dataOriginal)} no período atual
+              {dataOriginal > data ? " (é depois do último lançamento registrado)" : " (é antes do primeiro lançamento registrado)"}
+              . Mostrando o {dataOriginal > data ? "último" : "primeiro"} período disponível: <strong>{fmtDate(data)}</strong>.
+            </p>
+          )}
+          {dataAntAjustada && dataAntOriginal && (
+            <p>
+              Não há dados contábeis para {fmtDate(dataAntOriginal)} no período anterior
+              {dataAntOriginal > dataAnt ? " (é depois do último lançamento registrado)" : " (é antes do primeiro lançamento registrado)"}
+              . Mostrando o {dataAntOriginal > dataAnt ? "último" : "primeiro"} período disponível: <strong>{fmtDate(dataAnt)}</strong>.
+            </p>
+          )}
+        </div>
+      )}
 
       <div>
         <h2 className="text-sm font-medium text-slate-700 mb-2">Ativo</h2>

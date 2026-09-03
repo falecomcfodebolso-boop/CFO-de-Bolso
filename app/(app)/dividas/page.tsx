@@ -16,6 +16,7 @@ import {
 import { getBalanco } from "@/lib/accounting/demonstrativos";
 import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { sincronizarComSaldoContabil } from "@/lib/accounting/sync";
+import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
 
 const NOME_TIPO: Record<string, string> = {
   emprestimo: "Empréstimo",
@@ -35,14 +36,19 @@ export default async function DividasPage({
   const currency = currentMembership.organizations?.base_currency ?? "USD";
   const hoje = new Date().toISOString().slice(0, 10);
   const { data: dataParam } = await searchParams;
-  const dataRef = dataParam || hoje;
+  const dataEscolhida = dataParam || hoje;
 
-  const [{ data: dividasData, error }, balanco, saldos] = await Promise.all([
+  const [{ data: dividasData, error }, intervalo] = await Promise.all([
     supabase.from("dividas").select("*").eq("org_id", currentOrgId).order("valor_atual", { ascending: false }),
+    getIntervaloDeLancamentos(supabase, currentOrgId),
+  ]);
+  if (error) throw error;
+
+  const { data: dataRef, ajustada: dataAjustada, dataOriginal } = resolverDataReferencia(dataEscolhida, intervalo);
+  const [balanco, saldos] = await Promise.all([
     getBalanco(supabase, currentOrgId, dataRef),
     getSaldosPorContaAteData(supabase, currentOrgId, dataRef),
   ]);
-  if (error) throw error;
 
   const dividasBrutas = (dividasData ?? []) as Divida[];
   const dividas = sincronizarComSaldoContabil(dividasBrutas, saldos);
@@ -88,6 +94,17 @@ export default async function DividasPage({
           {new Date(`${dataRef}T00:00:00Z`).toLocaleDateString("pt-BR")}.
         </span>
       </form>
+
+      {dataAjustada && dataOriginal && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3">
+          Não há dados contábeis para {fmtDate(dataOriginal)}
+          {dataOriginal > dataRef
+            ? " (é depois do último lançamento registrado)"
+            : " (é antes do primeiro lançamento registrado)"}
+          . Mostrando o {dataOriginal > dataRef ? "último" : "primeiro"} período disponível:{" "}
+          <strong>{fmtDate(dataRef)}</strong>.
+        </div>
+      )}
 
       {canWrite(currentMembership.role) && (
         <div className="bg-white border border-slate-200 rounded-xl p-4">

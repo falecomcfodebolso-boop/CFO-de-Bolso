@@ -4,7 +4,7 @@ import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovoAtivoForm } from "./novo-ativo-form";
 import { deleteAtivoAction } from "./actions";
 import { AnaliseCarteira } from "./analise-carteira";
-import { fmtMoney } from "@/lib/format";
+import { fmtMoney, fmtDate } from "@/lib/format";
 import {
   totalCarteira,
   hhi,
@@ -24,6 +24,7 @@ import {
 import { totalPorNatureza, getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { getBalanco } from "@/lib/accounting/demonstrativos";
 import { sincronizarComSaldoContabil } from "@/lib/accounting/sync";
+import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
 
 export default async function CarteiraPage({
   searchParams,
@@ -35,27 +36,22 @@ export default async function CarteiraPage({
   const podeEscrever = canWrite(currentMembership.role);
   const hoje = new Date().toISOString().slice(0, 10);
   const { data: dataParam } = await searchParams;
-  const dataRef = dataParam || hoje;
+  const dataEscolhida = dataParam || hoje;
 
-  const [{ data: ativosData, error }, saldos, { data: primeiroLancamento }, { data: analisesData }] =
-    await Promise.all([
-      supabase.from("ativos").select("*").eq("org_id", currentOrgId).order("valor_atual", { ascending: false }),
-      getSaldosPorContaAteData(supabase, currentOrgId, dataRef),
-      supabase
-        .from("lancamentos")
-        .select("data")
-        .eq("org_id", currentOrgId)
-        .order("data", { ascending: true })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("analises_carteira")
-        .select("id, conteudo, created_at")
-        .eq("org_id", currentOrgId)
-        .order("created_at", { ascending: false })
-        .limit(5),
-    ]);
+  const [{ data: ativosData, error }, intervalo, { data: analisesData }] = await Promise.all([
+    supabase.from("ativos").select("*").eq("org_id", currentOrgId).order("valor_atual", { ascending: false }),
+    getIntervaloDeLancamentos(supabase, currentOrgId),
+    supabase
+      .from("analises_carteira")
+      .select("id, conteudo, created_at")
+      .eq("org_id", currentOrgId)
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ]);
   if (error) throw error;
+
+  const { data: dataRef, ajustada: dataAjustada, dataOriginal } = resolverDataReferencia(dataEscolhida, intervalo);
+  const saldos = await getSaldosPorContaAteData(supabase, currentOrgId, dataRef);
 
   const ativosBrutos = (ativosData ?? []) as Ativo[];
   const ativos = sincronizarComSaldoContabil(ativosBrutos, saldos);
@@ -90,7 +86,7 @@ export default async function CarteiraPage({
   const spreadVsK = taxaMedia - k;
 
   // ROI do período: resultado ÷ Patrimônio Líquido de abertura (primeiro lançamento registrado).
-  const dataAbertura = primeiroLancamento?.data ?? null;
+  const dataAbertura = intervalo.primeira;
   const balancoRef = await getBalanco(supabase, currentOrgId, dataRef);
   const balancoAbertura = dataAbertura ? await getBalanco(supabase, currentOrgId, dataAbertura) : null;
   const plAbertura = balancoAbertura?.patrimonioLiquido ?? 0;
@@ -142,6 +138,17 @@ export default async function CarteiraPage({
           {new Date(`${dataRef}T00:00:00Z`).toLocaleDateString("pt-BR")}.
         </span>
       </form>
+
+      {dataAjustada && dataOriginal && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3">
+          Não há dados contábeis para {fmtDate(dataOriginal)}
+          {dataOriginal > dataRef
+            ? " (é depois do último lançamento registrado)"
+            : " (é antes do primeiro lançamento registrado)"}
+          . Mostrando o {dataOriginal > dataRef ? "último" : "primeiro"} período disponível:{" "}
+          <strong>{fmtDate(dataRef)}</strong>.
+        </div>
+      )}
 
       {podeEscrever && (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
