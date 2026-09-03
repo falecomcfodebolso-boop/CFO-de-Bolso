@@ -4,7 +4,7 @@ import { requireOrgContext, canWrite } from "@/lib/org";
 import { revalidatePath } from "next/cache";
 import { lerArquivoGenerico } from "@/lib/import/genericos";
 import { parseDataFlexivel, parseValorFlexivel, ParseError } from "@/lib/import/parsers";
-import { normalizarNatureza, normalizarTexto, type Natureza } from "@/lib/import/mapeamento";
+import { extrairCodigoDeCelula, normalizarNatureza, normalizarTexto, type Natureza } from "@/lib/import/mapeamento";
 import { classificarConta } from "@/lib/accounting/classificacao";
 
 export type AnaliseArquivo =
@@ -104,7 +104,21 @@ export async function importarContasAction(_prev: unknown, formData: FormData): 
     return { erro: "Nenhuma linha pôde ser importada — confira os avisos.", avisos };
   }
 
-  const { error } = await supabase.from("plano_de_contas").insert(paraCriar);
+  // Contas "de agrupamento" (ex: "1", "1.1", "1.1.1") não recebem lançamentos diretamente — só as
+  // contas-folha (sem "filhas" dentro do próprio código) devem aparecer como opção em seletores de
+  // conta pelo app. Marcamos is_leaf com base em quem tem outro código do lote (ou já existente)
+  // começando com "<código>.".
+  const todosOsCodigos = new Set<string>([...codigosExistentes, ...paraCriar.map((c) => c.code as string)]);
+  const temFilho = (code: string) => {
+    const prefixo = `${code}.`;
+    for (const outro of todosOsCodigos) {
+      if (outro !== code && outro.startsWith(prefixo)) return true;
+    }
+    return false;
+  };
+  const paraCriarComLeaf = paraCriar.map((c) => ({ ...c, is_leaf: !temFilho(c.code as string) }));
+
+  const { error } = await supabase.from("plano_de_contas").insert(paraCriarComLeaf);
   if (error) return { erro: error.message, avisos };
 
   revalidatePath("/plano-de-contas");
@@ -150,7 +164,7 @@ export async function importarSaldosAction(_prev: unknown, formData: FormData): 
     const valorRaw = String(linha[colValor] ?? "").trim();
     if (!chave && !valorRaw) return;
 
-    const conta = porCode.get(chave) ?? porNome.get(normalizarTexto(chave));
+    const conta = porCode.get(chave) ?? porCode.get(extrairCodigoDeCelula(chave)) ?? porNome.get(normalizarTexto(chave));
     if (!conta) {
       avisos.push(`Linha ${i + 2}: conta "${chave}" não encontrada no plano de contas — ignorada.`);
       return;
@@ -215,9 +229,18 @@ export async function importarSaldosAction(_prev: unknown, formData: FormData): 
   return { criadas: linhasLancamento.length, avisos };
 }
 
-const LIMITE_LINHAS_LANCAMENTOS = 500;
+const LIMITE_LINHAS_LANCAMENTOS = 1000;
 
-/** Carga em massa de lançamentos históricos — cada linha do arquivo vira um lançamento de 2 linhas (débito/crédito). */
+type LinhaLancamento = { conta_code: string; tipo: "D" | "C"; valor: number };
+type GrupoLancamento = { data: string; historico: string; linhaInicio: number; linhas: LinhaLancamento[] };
+
+/**
+ * Carga em massa de lançamentos históricos, no formato de diário contábil "de verdade": um
+ * lançamento pode ter várias linhas de débito e várias de crédito (não só uma de cada). Uma nova
+ * linha do arquivo com a coluna Data preenchida inicia um novo lançamento; linhas seguintes com
+ * Data em branco são consideradas parte do mesmo lançamento — é assim que planilhas contábeis
+ * tradicionalmente organizam um diário com várias pernas por lançamento.
+ */
 export async function importarLancamentosAction(_prev: unknown, formData: FormData): Promise<ResultadoImportacao> {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   if (!canWrite(currentMembership.role)) return { erro: "Seu papel (viewer) não permite importar dados." };
@@ -227,12 +250,18 @@ export async function importarLancamentosAction(_prev: unknown, formData: FormDa
 
   const colData = colIndex(formData, "col_data");
   const colHistorico = colIndex(formData, "col_historico");
-  const colDebito = colIndex(formData, "col_debito");
-  const colCredito = colIndex(formData, "col_credito");
-  const colValor = colIndex(formData, "col_valor");
+  const colContaDebito = colIndex(formData, "col_conta_debito");
+  const colValorDebito = colIndex(formData, "col_valor_debito");
+  const colContaCredito = colIndex(formData, "col_conta_credito");
+  const colValorCredito = colIndex(formData, "col_valor_credito");
 
-  if ([colData, colHistorico, colDebito, colCredito, colValor].some((c) => c < 0)) {
-    return { erro: "Selecione todas as colunas obrigatórias antes de confirmar." };
+  if (colData < 0 || colHistorico < 0) {
+    return { erro: "Selecione as colunas de data e histórico antes de confirmar." };
+  }
+  const temLadoDebito = colContaDebito >= 0 && colValorDebito >= 0;
+  const temLadoCredito = colContaCredito >= 0 && colValorCredito >= 0;
+  if (!temLadoDebito && !temLadoCredito) {
+    return { erro: "Mapeie ao menos um par completo: conta débito + valor débito, ou conta crédito + valor crédito." };
   }
 
   let linhas: string[][];
@@ -245,14 +274,63 @@ export async function importarLancamentosAction(_prev: unknown, formData: FormDa
 
   if (linhas.length > LIMITE_LINHAS_LANCAMENTOS) {
     return {
-      erro: `O arquivo tem ${linhas.length} linhas — por segurança, importe no máximo ${LIMITE_LINHAS_LANCAMENTOS} lançamentos por vez (divida o arquivo em partes e importe em várias rodadas).`,
+      erro: `O arquivo tem ${linhas.length} linhas — por segurança, importe no máximo ${LIMITE_LINHAS_LANCAMENTOS} linhas por vez (divida o arquivo em partes e importe em várias rodadas).`,
     };
   }
 
   const { data: contas } = await supabase.from("plano_de_contas").select("code, name").eq("org_id", currentOrgId);
   const porCode = new Map((contas ?? []).map((c) => [c.code as string, c.code as string]));
   const porNome = new Map((contas ?? []).map((c) => [normalizarTexto(c.name as string), c.code as string]));
-  const resolverConta = (chave: string) => porCode.get(chave) ?? porNome.get(normalizarTexto(chave)) ?? null;
+  const resolverConta = (chave: string) =>
+    porCode.get(chave) ?? porCode.get(extrairCodigoDeCelula(chave)) ?? porNome.get(normalizarTexto(chave)) ?? null;
+
+  const avisos: string[] = [];
+  const grupos: GrupoLancamento[] = [];
+  let atual: GrupoLancamento | null = null;
+
+  linhas.forEach((linha, i) => {
+    const dataRaw = String(linha[colData] ?? "").trim();
+    const historicoRaw = String(linha[colHistorico] ?? "").trim();
+    const contaDebitoRaw = temLadoDebito ? String(linha[colContaDebito] ?? "").trim() : "";
+    const valorDebitoRaw = temLadoDebito ? String(linha[colValorDebito] ?? "").trim() : "";
+    const contaCreditoRaw = temLadoCredito ? String(linha[colContaCredito] ?? "").trim() : "";
+    const valorCreditoRaw = temLadoCredito ? String(linha[colValorCredito] ?? "").trim() : "";
+
+    if (!dataRaw && !historicoRaw && !contaDebitoRaw && !contaCreditoRaw) return; // linha em branco
+
+    if (dataRaw) {
+      const data = parseDataFlexivel(dataRaw);
+      if (!data) {
+        avisos.push(`Linha ${i + 2}: data "${dataRaw}" inválida — linha ignorada.`);
+        atual = null;
+      } else {
+        atual = { data, historico: historicoRaw || "Importado", linhaInicio: i + 2, linhas: [] };
+        grupos.push(atual);
+      }
+    }
+
+    if (!atual) {
+      if (contaDebitoRaw || contaCreditoRaw) {
+        avisos.push(`Linha ${i + 2}: linha antes de qualquer data válida — ignorada.`);
+      }
+      return;
+    }
+
+    if (contaDebitoRaw && valorDebitoRaw) {
+      const conta = resolverConta(contaDebitoRaw);
+      const valor = parseValorFlexivel(valorDebitoRaw);
+      if (!conta) avisos.push(`Linha ${i + 2}: conta débito "${contaDebitoRaw}" não encontrada — linha ignorada.`);
+      else if (valor === null || valor <= 0) avisos.push(`Linha ${i + 2}: valor débito "${valorDebitoRaw}" inválido — linha ignorada.`);
+      else atual.linhas.push({ conta_code: conta, tipo: "D", valor: Math.abs(valor) });
+    }
+    if (contaCreditoRaw && valorCreditoRaw) {
+      const conta = resolverConta(contaCreditoRaw);
+      const valor = parseValorFlexivel(valorCreditoRaw);
+      if (!conta) avisos.push(`Linha ${i + 2}: conta crédito "${contaCreditoRaw}" não encontrada — linha ignorada.`);
+      else if (valor === null || valor <= 0) avisos.push(`Linha ${i + 2}: valor crédito "${valorCreditoRaw}" inválido — linha ignorada.`);
+      else atual.linhas.push({ conta_code: conta, tipo: "C", valor: Math.abs(valor) });
+    }
+  });
 
   const { data: maxNumero } = await supabase
     .from("lancamentos")
@@ -263,38 +341,18 @@ export async function importarLancamentosAction(_prev: unknown, formData: FormDa
     .maybeSingle();
   let numero = maxNumero?.numero ?? 0;
 
-  const avisos: string[] = [];
   let criadas = 0;
-
-  for (let i = 0; i < linhas.length; i++) {
-    const linha = linhas[i];
-    const dataRaw = String(linha[colData] ?? "").trim();
-    const historico = String(linha[colHistorico] ?? "").trim() || "Importado";
-    const debitoRaw = String(linha[colDebito] ?? "").trim();
-    const creditoRaw = String(linha[colCredito] ?? "").trim();
-    const valorRaw = String(linha[colValor] ?? "").trim();
-
-    if (!dataRaw && !debitoRaw && !creditoRaw && !valorRaw) continue;
-
-    const data = parseDataFlexivel(dataRaw);
-    const valor = parseValorFlexivel(valorRaw);
-    const contaDebito = resolverConta(debitoRaw);
-    const contaCredito = resolverConta(creditoRaw);
-
-    if (!data) {
-      avisos.push(`Linha ${i + 2}: data "${dataRaw}" inválida — ignorada.`);
+  for (const g of grupos) {
+    if (g.linhas.length < 2) {
+      avisos.push(`Lançamento na linha ${g.linhaInicio} ("${g.historico}"): menos de 2 linhas — ignorado.`);
       continue;
     }
-    if (valor === null || valor <= 0) {
-      avisos.push(`Linha ${i + 2}: valor "${valorRaw}" inválido — ignorada.`);
-      continue;
-    }
-    if (!contaDebito) {
-      avisos.push(`Linha ${i + 2}: conta débito "${debitoRaw}" não encontrada — ignorada.`);
-      continue;
-    }
-    if (!contaCredito) {
-      avisos.push(`Linha ${i + 2}: conta crédito "${creditoRaw}" não encontrada — ignorada.`);
+    const totalD = g.linhas.filter((l) => l.tipo === "D").reduce((a, l) => a + l.valor, 0);
+    const totalC = g.linhas.filter((l) => l.tipo === "C").reduce((a, l) => a + l.valor, 0);
+    if (Math.abs(totalD - totalC) > 0.01) {
+      avisos.push(
+        `Lançamento na linha ${g.linhaInicio} ("${g.historico}"): não balanceado (débitos ${totalD.toFixed(2)} vs. créditos ${totalC.toFixed(2)}) — ignorado.`
+      );
       continue;
     }
 
@@ -302,16 +360,13 @@ export async function importarLancamentosAction(_prev: unknown, formData: FormDa
     const { error } = await supabase.rpc("create_lancamento", {
       p_org_id: currentOrgId,
       p_numero: numero,
-      p_data: data,
-      p_historico: historico,
-      p_linhas: [
-        { conta_code: contaDebito, tipo: "D", valor: Math.abs(valor) },
-        { conta_code: contaCredito, tipo: "C", valor: Math.abs(valor) },
-      ],
+      p_data: g.data,
+      p_historico: g.historico,
+      p_linhas: g.linhas,
       p_intercompany_org_id: null,
     });
     if (error) {
-      avisos.push(`Linha ${i + 2}: erro ao gravar — ${error.message}`);
+      avisos.push(`Lançamento na linha ${g.linhaInicio} ("${g.historico}"): erro ao gravar — ${error.message}`);
       numero -= 1;
       continue;
     }

@@ -13,7 +13,7 @@ export function normalizarTexto(s: string): string {
     .toLowerCase();
 }
 
-export type Natureza = "ATIVO" | "PASSIVO" | "PL" | "RECEITA" | "DESPESA";
+export type Natureza = "ATIVO" | "PASSIVO" | "PL" | "RECEITA" | "DESPESA" | "CONTROLE";
 
 const NATUREZA_PALAVRAS: Record<Natureza, string[]> = {
   ATIVO: ["ativo"],
@@ -21,7 +21,15 @@ const NATUREZA_PALAVRAS: Record<Natureza, string[]> = {
   PL: ["patrimonio liquido", "patrimonio", " pl", "pl ", "capital social"],
   RECEITA: ["receita"],
   DESPESA: ["despesa", "custo"],
+  CONTROLE: ["controle", "memorando", "memo"],
 };
+
+/** Extrai o código no início de uma célula do tipo "1.1.1.001 - Caixa - Banco Itaú" (comum quando a
+ *  planilha de origem já mostra "código - nome da conta" numa coluna só de referência à conta). */
+export function extrairCodigoDeCelula(valor: string): string {
+  const m = valor.trim().match(/^([0-9]+(?:\.[0-9]+)*)\s*[-\u2013\u2014]/);
+  return m ? m[1] : valor.trim();
+}
 
 /** Tenta reconhecer a natureza contábil a partir de texto livre (ex: exportado de outro sistema). */
 export function normalizarNatureza(raw: string): Natureza | null {
@@ -57,10 +65,16 @@ export const CAMPOS_SALDOS: CampoMapeavel[] = [
   { campo: "valor", rotulo: "Saldo", obrigatorio: true, palavrasChave: ["saldo", "valor", "amount"] },
 ];
 
+// O formato aceito é o de um diário contábil "de verdade": um lançamento pode ter várias linhas
+// de débito e várias de crédito (não só uma de cada). Cada linha da planilha é uma perna (débito OU
+// crédito) de um lançamento; uma nova linha do diário (identificada pela coluna Data preenchida)
+// inicia um novo lançamento — linhas seguintes com Data em branco pertencem ao mesmo lançamento,
+// exatamente como planilhas contábeis tradicionalmente organizam isso.
 export const CAMPOS_LANCAMENTOS: CampoMapeavel[] = [
-  { campo: "data", rotulo: "Data", obrigatorio: true, palavrasChave: ["data", "date"] },
+  { campo: "data", rotulo: "Data (preenchida só na 1ª linha de cada lançamento)", obrigatorio: true, palavrasChave: ["data", "date"] },
   { campo: "historico", rotulo: "Histórico/Descrição", obrigatorio: true, palavrasChave: ["historico", "descricao", "memo"] },
-  { campo: "debito", rotulo: "Conta débito", obrigatorio: true, palavrasChave: ["debito", "conta debito", "debit"] },
-  { campo: "credito", rotulo: "Conta crédito", obrigatorio: true, palavrasChave: ["credito", "conta credito", "credit"] },
-  { campo: "valor", rotulo: "Valor", obrigatorio: true, palavrasChave: ["valor", "amount"] },
+  { campo: "conta_debito", rotulo: "Conta débito", obrigatorio: false, palavrasChave: ["conta debito", "conta débito", "debit account"] },
+  { campo: "valor_debito", rotulo: "Valor débito", obrigatorio: false, palavrasChave: ["valor debito", "valor débito", "debito", "debit"] },
+  { campo: "conta_credito", rotulo: "Conta crédito", obrigatorio: false, palavrasChave: ["conta credito", "conta crédito", "credit account"] },
+  { campo: "valor_credito", rotulo: "Valor crédito", obrigatorio: false, palavrasChave: ["valor credito", "valor crédito", "credito", "credit"] },
 ];
