@@ -15,6 +15,7 @@ import {
   type Ativo,
 } from "@/lib/portfolio/indices";
 import { totalPorNatureza, getSaldosPorConta } from "@/lib/accounting/queries";
+import { sincronizarComSaldoContabil } from "@/lib/accounting/sync";
 
 export default async function CarteiraPage() {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
@@ -26,7 +27,8 @@ export default async function CarteiraPage() {
   ]);
   if (error) throw error;
 
-  const ativos = (ativosData ?? []) as Ativo[];
+  const ativosBrutos = (ativosData ?? []) as Ativo[];
+  const ativos = sincronizarComSaldoContabil(ativosBrutos, saldos);
   const total = totalCarteira(ativos);
   const hhiValue = hhi(ativos);
   const concentracao = classificarConcentracao(hhiValue);
@@ -161,6 +163,7 @@ export default async function CarteiraPage() {
               <th className="text-left px-4 py-2">Nome</th>
               <th className="text-left px-4 py-2">Custodiante</th>
               <th className="text-right px-4 py-2">Valor</th>
+              <th></th>
               <th className="text-right px-4 py-2">Cupom</th>
               <th className="text-right px-4 py-2">Vencimento</th>
               {canWrite(currentMembership.role) && <th></th>}
@@ -172,6 +175,16 @@ export default async function CarteiraPage() {
                 <td className="px-4 py-2 text-slate-800">{a.nome}</td>
                 <td className="px-4 py-2 text-slate-500">{a.custodiante ?? "—"}</td>
                 <td className="px-4 py-2 text-right text-slate-900">{fmtMoney(Number(a.valor_atual), currency)}</td>
+                <td className="px-4 py-1">
+                  {a.sincronizado && (
+                    <span
+                      title="Valor sincronizado ao vivo com o saldo da conta vinculada no Plano de Contas"
+                      className="inline-block text-[10px] leading-none px-1.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    >
+                      contábil
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-right text-slate-500">
                   {a.taxa_cupom ? `${(Number(a.taxa_cupom) * 100).toFixed(3)}%` : "—"}
                 </td>

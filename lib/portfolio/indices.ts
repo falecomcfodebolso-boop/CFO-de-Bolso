@@ -7,6 +7,7 @@ export type Ativo = {
   taxa_cupom: number | null;
   data_vencimento: string | null;
   rating: string | null;
+  conta_code?: string | null;
 };
 
 export function totalCarteira(ativos: Ativo[]) {

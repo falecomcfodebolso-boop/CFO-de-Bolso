@@ -14,6 +14,8 @@ import {
   type Divida,
 } from "@/lib/portfolio/passivos";
 import { getBalanco } from "@/lib/accounting/demonstrativos";
+import { getSaldosPorConta } from "@/lib/accounting/queries";
+import { sincronizarComSaldoContabil } from "@/lib/accounting/sync";
 
 const NOME_TIPO: Record<string, string> = {
   emprestimo: "Empréstimo",
@@ -29,13 +31,15 @@ export default async function DividasPage() {
   const currency = currentMembership.organizations?.base_currency ?? "USD";
   const hoje = new Date().toISOString().slice(0, 10);
 
-  const [{ data: dividasData, error }, balanco] = await Promise.all([
+  const [{ data: dividasData, error }, balanco, saldos] = await Promise.all([
     supabase.from("dividas").select("*").eq("org_id", currentOrgId).order("valor_atual", { ascending: false }),
     getBalanco(supabase, currentOrgId, hoje),
+    getSaldosPorConta(supabase, currentOrgId),
   ]);
   if (error) throw error;
 
-  const dividas = (dividasData ?? []) as Divida[];
+  const dividasBrutas = (dividasData ?? []) as Divida[];
+  const dividas = sincronizarComSaldoContabil(dividasBrutas, saldos);
   const total = totalDividas(dividas);
   const hhiValue = hhiDividas(dividas);
   const concentracao = classificarConcentracao(hhiValue);
@@ -196,6 +200,7 @@ export default async function DividasPage() {
                 <th className="text-left px-4 py-2">Credor</th>
                 <th className="text-left px-4 py-2">Tipo</th>
                 <th className="text-right px-4 py-2">Saldo devedor</th>
+                <th></th>
                 <th className="text-right px-4 py-2">Taxa</th>
                 <th className="text-right px-4 py-2">Vencimento</th>
                 {canWrite(currentMembership.role) && <th></th>}
@@ -208,6 +213,16 @@ export default async function DividasPage() {
                   <td className="px-4 py-2 text-slate-500">{d.credor ?? "—"}</td>
                   <td className="px-4 py-2 text-slate-500">{NOME_TIPO[d.tipo] ?? d.tipo}</td>
                   <td className="px-4 py-2 text-right text-slate-900">{fmtMoney(Number(d.valor_atual), currency)}</td>
+                  <td className="px-4 py-1">
+                    {d.sincronizado && (
+                      <span
+                        title="Saldo sincronizado ao vivo com o saldo da conta vinculada no Plano de Contas"
+                        className="inline-block text-[10px] leading-none px-1.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      >
+                        contábil
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-right text-slate-500">
                     {d.taxa_juros ? `${(Number(d.taxa_juros) * 100).toFixed(2)}%` : "—"}
                   </td>
@@ -226,7 +241,7 @@ export default async function DividasPage() {
               ))}
               {dividas.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-4 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-4 text-center text-slate-400">
                     Nenhuma dívida cadastrada ainda.
                   </td>
                 </tr>

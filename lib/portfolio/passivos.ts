@@ -9,6 +9,7 @@ export type Divida = {
   taxa_juros: number | null;
   data_contratacao: string | null;
   data_vencimento: string | null;
+  conta_code?: string | null;
 };
 
 export function totalDividas(dividas: Divida[]) {
