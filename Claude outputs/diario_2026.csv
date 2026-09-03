@@ -1,0 +1,263 @@
+Numero Lancamento,Data,Historico,Conta Debito,Valor Debito,Conta Credito,Valor Credito
+1,2026-01-01,Balanço de abertura do exercício 2026 (saldos reportados em 31/12/2025),1.1.1.001 - Caixa - Banco Itaú,3212.35,,
+,,,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),1011.04,,
+,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),41950,,
+,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,24158,,
+,,,1.1.3.001 - Pimco (Itaú),117670.01,,
+,,,1.1.3.002 - Vale- jul30 (Itaú),196812.5,,
+,,,1.1.3.003 - Odebrechet (Itaú),28710,,
+,,,1.1.3.004 - Petrobrás- jan31 (Itaú),256952.5,,
+,,,1.1.3.005 - Vale- nov36 (Itaú),147570.5,,
+,,,1.1.3.006 - CLN HSBC (Itaú),50000,,
+,,,1.1.3.007 - CLN ARCMITTAL (Itaú),100000,,
+,,,1.1.3.008 - CLN BOFA (Itaú),100000,,
+,,,1.1.3.009 - VANG (Itaú),11255.7,,
+,,,1.1.3.010 - CLN JP MORGAN (Itaú),200000,,
+,,,1.1.3.011 - HSBC (Itaú),191200,,
+,,,1.1.3.012 - Santander- jan30 (Itaú),208300,,
+,,,1.1.3.013 - JPM CP NOTE (Itaú),240000,,
+,,,1.1.3.014 - CLN GLENCORE (Itaú),190000,,
+,,,1.1.3.015 - OAKTREE FUND (Itaú),151912.25,,
+,,,1.1.3.016 - BB (Itaú),204440,,
+,,,1.1.3.017 - Suzano (Itaú),216048,,
+,,,1.1.3.018 - CD Itaú 17fev26 (Itaú),200350.24,,
+,,,1.1.3.019 - Note GLD (Itaú),97662.02,,
+,,,1.1.3.020 - CLN Bradesco (Itaú),200000,,
+,,,1.1.4.001 - XP Real State (XP/Bradesco),53068.85,,
+,,,1.1.4.002 - Petrobrás- jan31 (XP/Bradesco),97920,,
+,,,1.1.4.003 - Petrobrás-jan40 (XP/Bradesco),107227.5,,
+,,,1.1.4.004 - Santander- jul27 (XP/Bradesco),96295,,
+,,,1.1.4.005 - Ultrapar- jun29 (XP/Bradesco),148260,,
+,,,1.1.4.006 - Eletrobrás (XP/Bradesco),151307.5,,
+,,,1.1.4.007 - Dell- out29 (XP/Bradesco),94112.5,,
+,,,1.1.4.008 - GM- out28 (XP/Bradesco),95800,,
+,,,1.1.4.009 - BB (XP/Bradesco),124750,,
+,,,1.1.4.010 - Jp Morgan (XP/Bradesco),97845,,
+,,,1.1.4.011 - Bank Amer (XP/Bradesco),98860,,
+,,,1.1.4.012 - Goldman Sachs (XP/Bradesco),48895,,
+,,,1.1.4.013 - Citigroup (XP/Bradesco),49270,,
+,,,1.1.4.014 - Morgan Stanley (XP/Bradesco),96705,,
+,,,1.1.4.015 - Wells Fargo & Co (XP/Bradesco),70026.4,,
+,,,1.1.4.016 - Bradesco (XP/Bradesco),82620,,
+,,,1.1.4.017 - Itaú fev2030 (XP/Bradesco),100500,,
+,,,,,3.1.001 - Capital Social - Itaú,19549
+,,,,,3.1.002 - Capital Social - XP,30451
+,,,,,3.2.001 - Reserva de Capital (Allowance) - Itaú,1852640.38
+,,,,,3.2.002 - Reserva de Capital (Allowance) - XP,242344.85
+,,,,,3.3.001 - Lucros Acumulados - Itaú,1281856.69
+,,,,,3.3.002 - Lucros Acumulados - XP,1365835.94
+2,2026-01-03,Juros recebidos Petrobrás,1.1.1.001 - Caixa - Banco Itaú,6580,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),6580
+3,2026-01-05,Juros recebidos Petrobrás,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),2380,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,2380
+4,2026-01-07,Juros CLN BOFA,1.1.1.001 - Caixa - Banco Itaú,1431.11,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),1431.11
+5,2026-01-07,Pagamento XP Real State,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),53068.88,,
+,,,,,1.1.4.001 - XP Real State (XP/Bradesco),53068.88
+6,2026-01-07,receita liquidação Real State,1.1.4.001 - XP Real State (XP/Bradesco),0.03,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),0.03
+7,2026-01-08,Juros recebidos Vale,1.1.1.001 - Caixa - Banco Itaú,4406.25,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),4406.25
+8,2026-01-09,Juros CLN Glencore,1.1.1.001 - Caixa - Banco Itaú,2773.35,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),2773.35
+9,2026-01-09,Juros CLN JPM,1.1.1.001 - Caixa - Banco Itaú,2827.31,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),2827.31
+10,2026-01-09,Juros recebidos Santander,1.1.1.001 - Caixa - Banco Itaú,6174,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),6174
+11,2026-01-13,Juros recebidos Santander,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),2200,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,2200
+12,2026-01-15,Juros recebidos Suzano,1.1.1.001 - Caixa - Banco Itaú,3750,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),3750
+13,2026-01-20,Juros recebidos Petrobrás,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),2921.88,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,2921.88
+14,2026-01-22,Juros recebidos Bradesco,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),2632.5,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,2632.5
+15,2026-01-22,Juros recebidos Morgan Stanley,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),1416.98,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,1416.98
+16,2026-01-23,Juros recebidos Wells Fargo,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),1767.32,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,1767.32
+17,2026-01-30,Rendimento aplicação automática,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),118.62,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),118.62
+18,2026-01-31,Rendimento Fundo Pimco,1.1.3.001 - Pimco (Itaú),224.08,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",224.08
+19,2026-01-31,Rendimento Vang,1.1.3.009 - VANG (Itaú),76.5,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",76.5
+20,2026-01-31,Rendimento OakTree Fund,1.1.3.015 - OAKTREE FUND (Itaú),721.51,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",721.51
+21,2026-01-31,Rendimento CD Itaú,1.1.3.018 - CD Itaú 17fev26 (Itaú),745.37,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",745.37
+22,2026-01-31,Rendimento Note GLD,1.1.3.019 - Note GLD (Itaú),7945.88,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",7945.88
+23,2026-02-04,Juros recebidos Eletrobrás/ Axia,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),3353.13,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,3353.13
+24,2026-02-09,Juros recebidos Bank Amer,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),1987,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,1987
+25,2026-02-17,Pagamento no vencimento CD Itaú,1.1.1.001 - Caixa - Banco Itaú,200000,,
+,,,,,1.1.3.018 - CD Itaú 17fev26 (Itaú),200000
+26,2026-02-17,prejuízo CD Itaú,5.1.001 - Despesas Financeiras e Perdas - Itaú,1095.61,,
+,,,,,1.1.3.018 - CD Itaú 17fev26 (Itaú),1095.61
+27,2026-02-17,Juros recebido CD Itaú,1.1.1.001 - Caixa - Banco Itaú,2493.33,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),2493.33
+28,2026-02-19,compra de 200.000 quantidades de CD Itaú com vencimento em 19/05/26,1.1.3.021 - CD ITAÚ 19mai26 (Itaú),200000,,
+,,,,,1.1.1.001 - Caixa - Banco Itaú,200000
+29,2026-02-27,Juros recebidos Itaú,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),3000,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,3000
+30,2026-02-27,Rendimento aplicação automática,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),157.44,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),157.44
+31,2026-02-28,Rendimento Fundo Pimco,1.1.3.001 - Pimco (Itaú),196.07,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",196.07
+32,2026-02-28,Perda financeira Vang SP 500,5.1.001 - Despesas Financeiras e Perdas - Itaú,81.6,,
+,,,,,1.1.3.009 - VANG (Itaú),81.6
+33,2026-02-28,Prejuízo OAKTREE FUND,5.1.001 - Despesas Financeiras e Perdas - Itaú,91.52,,
+,,,,,1.1.3.015 - OAKTREE FUND (Itaú),91.52
+34,2026-02-28,Rendimento Note GLD,1.1.3.019 - Note GLD (Itaú),651.24,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",651.24
+35,2026-02-28,prejuízo CD Itaú,5.1.001 - Despesas Financeiras e Perdas - Itaú,141,,
+,,,,,1.1.3.021 - CD ITAÚ 19mai26 (Itaú),141
+36,2026-03-08,Juros recebidos JPM CP Note,1.1.1.001 - Caixa - Banco Itaú,4410,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),4410
+37,2026-03-16,Juros recebidos Goldman Sachs,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),950,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,950
+38,2026-03-18,Juros recebidos BB,1.1.1.001 - Caixa - Banco Itaú,6000,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),6000
+39,2026-03-18,Juros recebidos Banco do Brasil (parte já acruada + receita nova do período),1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),3750,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,1549.19
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),2200.81
+40,2026-03-20,Juros recebidos Citigroup,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),995,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),995
+41,2026-03-23,Pagamento American Express,5.1.001 - Despesas Financeiras e Perdas - Itaú,290,,
+,,,,,1.1.1.001 - Caixa - Banco Itaú,290
+42,2026-03-25,Juros recebidos Drillco,1.1.1.001 - Caixa - Banco Itaú,635,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",635
+43,2026-03-25,Juros recebidos Drillco (parte já acruada + receita nova do período),1.1.1.001 - Caixa - Banco Itaú,5745,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),1104.65
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",4640.35
+44,2026-03-27,Fee,5.2.001 - Despesas Financeiras e Perdas - XP/Bradesco,125,,
+,,,,,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),125
+45,2026-03-30,Rendimento aplicação automática,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),175.24,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),175.24
+46,2026-03-30,Transferência integral do saldo de caixa (encerramento conta XP / abertura conta Bradesco),1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),81741.1,,
+,,,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),18.93,,
+,,,,,1.1.1.002 - Caixa - XP (conta encerrada em 30/03/2026),81760.03
+47,2026-03-31,Perda financeira Pimco,5.1.001 - Despesas Financeiras e Perdas - Itaú,1148.41,,
+,,,,,1.1.3.001 - Pimco (Itaú),1148.41
+48,2026-03-31,Perda financeira Vang SP 500,5.1.001 - Despesas Financeiras e Perdas - Itaú,715.7,,
+,,,,,1.1.3.009 - VANG (Itaú),715.7
+49,2026-03-31,Prejuízo OAKTREE FUND,5.1.001 - Despesas Financeiras e Perdas - Itaú,1880.39,,
+,,,,,1.1.3.015 - OAKTREE FUND (Itaú),1880.39
+50,2026-03-31,prejuízo Note GLD,5.1.001 - Despesas Financeiras e Perdas - Itaú,5452.1,,
+,,,,,1.1.3.019 - Note GLD (Itaú),5452.1
+51,2026-03-31,prejuízo CD Itaú,5.1.001 - Despesas Financeiras e Perdas - Itaú,174.29,,
+,,,,,1.1.3.021 - CD ITAÚ 19mai26 (Itaú),174.29
+52,2026-04-01,Juros recebidos Dell,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),2517.5,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),2517.5
+53,2026-04-06,Taxa (outward fedwire charges),5.1.001 - Despesas Financeiras e Perdas - Itaú,50,,
+,,,,,1.1.1.001 - Caixa - Banco Itaú,50
+54,2026-04-06,Transferência de recursos do Itaú para o Bradesco,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),50000,,
+,,,,,1.1.1.001 - Caixa - Banco Itaú,50000
+55,2026-04-06,Realocação de capital alocado entre Itaú e XP/Bradesco (conta de controle),3.2.001 - Reserva de Capital (Allowance) - Itaú,50000,,
+,,,,,3.2.002 - Reserva de Capital (Allowance) - XP,50000
+56,2026-04-07,Juros CLN BOFA,1.1.1.001 - Caixa - Banco Itaú,1400,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",1400
+57,2026-04-08,Compra de 150.000 AT&T (custo do papel + despesas de aquisição),1.1.4.018 - AT&T (XP/Bradesco),132454.5,,
+,,,5.2.001 - Despesas Financeiras e Perdas - XP/Bradesco,628.13,,
+,,,,,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),133082.63
+58,2026-04-09,Juros CLN Glencore,1.1.1.001 - Caixa - Banco Itaú,2542.96,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",2542.96
+59,2026-04-09,Juros CLN JPM,1.1.1.001 - Caixa - Banco Itaú,2586.8,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",2586.8
+60,2026-04-20,Pagamento American Express,5.1.001 - Despesas Financeiras e Perdas - Itaú,100,,
+,,,,,1.1.1.001 - Caixa - Banco Itaú,100
+61,2026-04-30,Rendimento Fundo Pimco,1.1.3.001 - Pimco (Itaú),1344.48,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",1344.48
+62,2026-04-30,Rendimento Vang,1.1.3.009 - VANG (Itaú),1207,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",1207
+63,2026-04-30,Rendimento OakTree Fund,1.1.3.015 - OAKTREE FUND (Itaú),2322.02,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",2322.02
+64,2026-04-30,Rendimento Note GLD,1.1.3.019 - Note GLD (Itaú),636.96,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",636.96
+65,2026-04-30,Rendimento CD Itaú,1.1.3.021 - CD ITAÚ 19mai26 (Itaú),706.74,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",706.74
+66,2026-05-19,prejuízo CD Itaú,5.1.001 - Despesas Financeiras e Perdas - Itaú,391.45,,
+,,,,,1.1.3.021 - CD ITAÚ 19mai26 (Itaú),391.45
+67,2026-05-19,Juros recebido CD Itaú,1.1.1.001 - Caixa - Banco Itaú,1770.11,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",1770.11
+68,2026-05-19,Resgate no vencimento - CD Itaú 19/mai/26,1.1.1.001 - Caixa - Banco Itaú,200000,,
+,,,,,1.1.3.021 - CD ITAÚ 19mai26 (Itaú),200000
+69,2026-05-19,Compra de 200.000 United Mexican (custo do papel + despesas de aquisição),1.1.3.022 - United Mexican (Itaú),188392,,
+,,,5.1.001 - Despesas Financeiras e Perdas - Itaú,595.83,,
+,,,,,1.1.1.001 - Caixa - Banco Itaú,188987.83
+70,2026-05-21,Juros recebidos Vale,1.1.1.001 - Caixa - Banco Itaú,3781.25,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",3781.25
+71,2026-05-26,Juros recebidos HSBC,1.1.1.001 - Caixa - Banco Itaú,4375,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",4375
+72,2026-05-27,"Rendimentos diversos recebidos no mês (JP Morgan + GM), conforme extrato Bradesco",1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),4351,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),1851
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),2500
+73,2026-05-31,Rendimento Fundo Pimco,1.1.3.001 - Pimco (Itaú),336.12,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",336.12
+74,2026-05-31,Rendimento Vang,1.1.3.009 - VANG (Itaú),697,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",697
+75,2026-05-31,Rendimento OakTree Fund,1.1.3.015 - OAKTREE FUND (Itaú),834.31,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",834.31
+76,2026-05-31,Rendimento Note GLD,1.1.3.019 - Note GLD (Itaú),29.69,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",29.69
+77,2026-06-08,Juros recebidos JPM CP Note,1.1.1.001 - Caixa - Banco Itaú,4410,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",4410
+78,2026-06-08,Juros recebidos Ultrapar,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),3675,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),3675
+79,2026-06-30,Rendimento Fundo Pimco,1.1.3.001 - Pimco (Itaú),280.1,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",280.1
+80,2026-06-30,Perda financeira Vang SP 500,5.1.001 - Despesas Financeiras e Perdas - Itaú,159.8,,
+,,,,,1.1.3.009 - VANG (Itaú),159.8
+81,2026-06-30,Rendimento OakTree Fund,1.1.3.015 - OAKTREE FUND (Itaú),283.07,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",283.07
+82,2026-06-30,prejuízo Note GLD,5.1.001 - Despesas Financeiras e Perdas - Itaú,5287.7,,
+,,,,,1.1.3.019 - Note GLD (Itaú),5287.7
+83,2026-06-30,Reconhecimento juros acruados 2º trimestre (correção - conforme extrato Bradesco 30/06/2026),1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,21106.09,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),21106.09
+84,2026-07-06,Dividendo recebido Drillco,1.1.1.001 - Caixa - Banco Itaú,1918.83,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",1918.83
+85,2026-07-06,Dividendo recebido Drillco,1.1.1.001 - Caixa - Banco Itaú,212.09,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",212.09
+86,2026-07-31,"Perda financeira Pimco (marcação a mercado, ref. renda variável/multimercado)",5.1.001 - Despesas Financeiras e Perdas - Itaú,588.21,,
+,,,,,1.1.3.001 - Pimco (Itaú),588.21
+87,2026-07-31,Perda financeira Vang SP 500 (marcação a mercado),5.1.001 - Despesas Financeiras e Perdas - Itaú,78.2,,
+,,,,,1.1.3.009 - VANG (Itaú),78.2
+88,2026-07-31,Rendimento OakTree Fund,1.1.3.015 - OAKTREE FUND (Itaú),18.09,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",18.09
+89,2026-07-31,Rendimento Note GLD,1.1.3.019 - Note GLD (Itaú),30.24,,
+,,,,,"4.1.001 - Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",30.24
+90,2026-07-31,Reconhecimento juros acruados de julho (conforme extrato Bradesco 31/07/2026),1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,8567.26,,
+,,,,,4.2.001 - Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),8567.26
+91,2026-07-31,Baixa de juros acruados - recebimentos de cupom de julho/26 (Itaú),1.1.1.001 - Caixa - Banco Itaú,6580,,
+,,,1.1.1.001 - Caixa - Banco Itaú,1415.56,,
+,,,1.1.1.001 - Caixa - Banco Itaú,4406.25,,
+,,,1.1.1.001 - Caixa - Banco Itaú,2553.3,,
+,,,1.1.1.001 - Caixa - Banco Itaú,2596.69,,
+,,,1.1.1.001 - Caixa - Banco Itaú,6174,,
+,,,1.1.1.001 - Caixa - Banco Itaú,3750,,
+,,,,,1.1.2.001 - Juros Acruados a Receber - Itaú (posições com cupom periódico),27475.8
+92,2026-07-31,Reconhecimento de juros acruados por competência - CLN HSBC (jan a jun/26),1.1.2.002 - Juros Acruados a Receber - Itaú / CLN HSBC (Grupo 1),1351.72,,
+,,,,,4.1.002 - Receita Juros - Itaú / CLN HSBC (Grupo 1),1351.72
+93,2026-07-31,Reconhecimento de juros acruados por competência - CLN HSBC (julho/26),1.1.2.002 - Juros Acruados a Receber - Itaú / CLN HSBC (Grupo 1),234.65,,
+,,,,,4.1.002 - Receita Juros - Itaú / CLN HSBC (Grupo 1),234.65
+94,2026-07-31,Reconhecimento de juros acruados por competência - CLN ARC MITTAL (jan a jun/26),1.1.2.003 - Juros Acruados a Receber - Itaú / CLN ARC MITTAL (Grupo 1),2825.92,,
+,,,,,4.1.003 - Receita Juros - Itaú / CLN ARC MITTAL (Grupo 1),2825.92
+95,2026-07-31,Reconhecimento de juros acruados por competência - CLN ARC MITTAL (julho/26),1.1.2.003 - Juros Acruados a Receber - Itaú / CLN ARC MITTAL (Grupo 1),490.83,,
+,,,,,4.1.003 - Receita Juros - Itaú / CLN ARC MITTAL (Grupo 1),490.83
+96,2026-07-31,Reconhecimento de juros acruados por competência - CLN BRADESCO (jan a jun/26),1.1.2.004 - Juros Acruados a Receber - Itaú / CLN BRADESCO (Grupo 1),6215.28,,
+,,,,,4.1.004 - Receita Juros - Itaú / CLN BRADESCO (Grupo 1),6215.28
+97,2026-07-31,Reconhecimento de juros acruados por competência - CLN BRADESCO (julho/26),1.1.2.004 - Juros Acruados a Receber - Itaú / CLN BRADESCO (Grupo 1),1076.39,,
+,,,,,4.1.004 - Receita Juros - Itaú / CLN BRADESCO (Grupo 1),1076.39
+98,2026-07-31,Reconhecimento de juros acruados por competência - Outras posições Itaú (19 papéis c/ cupom) (jan a jun/26),1.1.2.005 - Juros Acruados a Receber - Itaú / Outras posições (19 papéis c/ cupom),37701.91,,
+,,,,,4.1.005 - Receita Juros - Itaú / Outras posições (19 papéis c/ cupom),37701.91
+99,2026-07-31,Reconhecimento de juros acruados por competência - Outras posições Itaú (19 papéis c/ cupom) (julho/26),1.1.2.005 - Juros Acruados a Receber - Itaú / Outras posições (19 papéis c/ cupom),10502.07,,
+,,,,,4.1.005 - Receita Juros - Itaú / Outras posições (19 papéis c/ cupom),10502.07
+100,2026-07-31,Baixa de juros acruados - recebimentos de cupom de julho/26 (XP/Bradesco),1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),2380,,
+,,,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),2200,,
+,,,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),2921.88,,
+,,,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),1416.98,,
+,,,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),2632.5,,
+,,,1.1.1.003 - Caixa - Banco Bradesco (aberta em 30/03/2026),1767.32,,
+,,,,,1.1.2.006 - Juros Acruados a Receber - XP/Bradesco,13318.68

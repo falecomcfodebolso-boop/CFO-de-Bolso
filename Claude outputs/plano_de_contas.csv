@@ -1,0 +1,89 @@
+Codigo,Descricao da Conta,Tipo
+1,ATIVO,ATIVO
+1.1,ATIVO CIRCULANTE E NÃO CIRCULANTE,ATIVO
+1.1.1,Disponibilidades (Caixa e Equivalentes),ATIVO
+1.1.1.001,Caixa - Banco Itaú,ATIVO
+1.1.1.002,Caixa - XP (conta encerrada em 30/03/2026),ATIVO
+1.1.1.003,Caixa - Banco Bradesco (aberta em 30/03/2026),ATIVO
+1.1.2,Juros Acruados a Receber,ATIVO
+1.1.2.001,Juros Acruados a Receber - Itaú (posições com cupom periódico),ATIVO
+1.1.2.002,Juros Acruados a Receber - Itaú / CLN HSBC (Grupo 1),ATIVO
+1.1.2.003,Juros Acruados a Receber - Itaú / CLN ARC MITTAL (Grupo 1),ATIVO
+1.1.2.004,Juros Acruados a Receber - Itaú / CLN BRADESCO (Grupo 1),ATIVO
+1.1.2.005,Juros Acruados a Receber - Itaú / Outras posições (19 papéis c/ cupom),ATIVO
+1.1.2.006,Juros Acruados a Receber - XP/Bradesco,ATIVO
+1.1.3,Aplicações Financeiras - Banco Itaú (subconta por ativo),ATIVO
+1.1.3.001,Pimco (Itaú),ATIVO
+1.1.3.002,Vale- jul30 (Itaú),ATIVO
+1.1.3.003,Odebrechet (Itaú),ATIVO
+1.1.3.004,Petrobrás- jan31 (Itaú),ATIVO
+1.1.3.005,Vale- nov36 (Itaú),ATIVO
+1.1.3.006,CLN HSBC (Itaú),ATIVO
+1.1.3.007,CLN ARCMITTAL (Itaú),ATIVO
+1.1.3.008,CLN BOFA (Itaú),ATIVO
+1.1.3.009,VANG (Itaú),ATIVO
+1.1.3.010,CLN JP MORGAN (Itaú),ATIVO
+1.1.3.011,HSBC (Itaú),ATIVO
+1.1.3.012,Santander- jan30 (Itaú),ATIVO
+1.1.3.013,JPM CP NOTE (Itaú),ATIVO
+1.1.3.014,CLN GLENCORE (Itaú),ATIVO
+1.1.3.015,OAKTREE FUND (Itaú),ATIVO
+1.1.3.016,BB (Itaú),ATIVO
+1.1.3.017,Suzano (Itaú),ATIVO
+1.1.3.018,CD Itaú 17fev26 (Itaú),ATIVO
+1.1.3.019,Note GLD (Itaú),ATIVO
+1.1.3.020,CLN Bradesco (Itaú),ATIVO
+1.1.3.021,CD ITAÚ 19mai26 (Itaú),ATIVO
+1.1.3.022,United Mexican (Itaú),ATIVO
+1.1.4,Aplicações Financeiras - Banco Bradesco/XP (subconta por ativo),ATIVO
+1.1.4.001,XP Real State (XP/Bradesco),ATIVO
+1.1.4.002,Petrobrás- jan31 (XP/Bradesco),ATIVO
+1.1.4.003,Petrobrás-jan40 (XP/Bradesco),ATIVO
+1.1.4.004,Santander- jul27 (XP/Bradesco),ATIVO
+1.1.4.005,Ultrapar- jun29 (XP/Bradesco),ATIVO
+1.1.4.006,Eletrobrás (XP/Bradesco),ATIVO
+1.1.4.007,Dell- out29 (XP/Bradesco),ATIVO
+1.1.4.008,GM- out28 (XP/Bradesco),ATIVO
+1.1.4.009,BB (XP/Bradesco),ATIVO
+1.1.4.010,Jp Morgan (XP/Bradesco),ATIVO
+1.1.4.011,Bank Amer (XP/Bradesco),ATIVO
+1.1.4.012,Goldman Sachs (XP/Bradesco),ATIVO
+1.1.4.013,Citigroup (XP/Bradesco),ATIVO
+1.1.4.014,Morgan Stanley (XP/Bradesco),ATIVO
+1.1.4.015,Wells Fargo & Co (XP/Bradesco),ATIVO
+1.1.4.016,Bradesco (XP/Bradesco),ATIVO
+1.1.4.017,Itaú fev2030 (XP/Bradesco),ATIVO
+1.1.4.018,AT&T (XP/Bradesco),ATIVO
+2,PASSIVO,PASSIVO
+2.1,PASSIVO - Não há contas de terceiros identificadas no período,PASSIVO
+3,PATRIMÔNIO LÍQUIDO,PATRIMÔNIO LÍQUIDO
+3.1,Capital Social,PATRIMÔNIO LÍQUIDO
+3.2,Reservas,PATRIMÔNIO LÍQUIDO
+3.3,Lucros Acumulados,PATRIMÔNIO LÍQUIDO
+3.4,Resultado do Exercício,PATRIMÔNIO LÍQUIDO
+3.1.001,Capital Social - Itaú,PATRIMÔNIO LÍQUIDO
+3.1.002,Capital Social - XP,PATRIMÔNIO LÍQUIDO
+3.2.001,Reserva de Capital (Allowance) - Itaú,PATRIMÔNIO LÍQUIDO
+3.2.002,Reserva de Capital (Allowance) - XP,PATRIMÔNIO LÍQUIDO
+3.3.001,Lucros Acumulados - Itaú,PATRIMÔNIO LÍQUIDO
+3.3.002,Lucros Acumulados - XP,PATRIMÔNIO LÍQUIDO
+3.4.001,Resultado do Exercício 2025 - Itaú,PATRIMÔNIO LÍQUIDO
+3.4.002,Resultado do Exercício 2026 - Itaú,PATRIMÔNIO LÍQUIDO
+3.4.003,Resultado do Exercício 2025 - XP,PATRIMÔNIO LÍQUIDO
+3.4.004,Resultado do Exercício 2026 - XP/Bradesco,PATRIMÔNIO LÍQUIDO
+4,CONTAS DE RESULTADO - RECEITAS,RECEITA
+4.1,Receitas Financeiras - Itaú,RECEITA
+4.1.001,"Receitas Financeiras - Itaú (rendimentos, dividendos e juros diversos)",RECEITA
+4.1.002,Receita Juros - Itaú / CLN HSBC (Grupo 1),RECEITA
+4.1.003,Receita Juros - Itaú / CLN ARC MITTAL (Grupo 1),RECEITA
+4.1.004,Receita Juros - Itaú / CLN BRADESCO (Grupo 1),RECEITA
+4.1.005,Receita Juros - Itaú / Outras posições (19 papéis c/ cupom),RECEITA
+4.2,Receitas Financeiras - XP/Bradesco,RECEITA
+4.2.001,Receitas Financeiras - XP/Bradesco (rendimentos e juros diversos),RECEITA
+5,CONTAS DE RESULTADO - DESPESAS,DESPESA
+5.1,Despesas Financeiras - Itaú,DESPESA
+5.1.001,Despesas Financeiras e Perdas - Itaú,DESPESA
+5.2,Despesas Financeiras - XP/Bradesco,DESPESA
+5.2.001,Despesas Financeiras e Perdas - XP/Bradesco,DESPESA
+9,CONTAS DE CONTROLE (MEMORANDO),MEMORANDO
+9.1.001,Memo - Transferência de custódia de ativos (sem efeito no valor contábil),MEMORANDO
