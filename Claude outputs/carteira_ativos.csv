@@ -1,0 +1,38 @@
+Nome do Ativo,Custodiante,Tipo,Valor US$,Cupom % a.a.,Vencimento,Conta do Plano de Contas
+Petrobrás- jan31,Itaú,renda_fixa,256952.5,5.6,2031-01-03,1.1.3.004
+JPM CP NOTE,Itaú,renda_fixa,240000,7.35,2032-09-08,1.1.3.013
+Suzano,Itaú,renda_fixa,216048,3.125,2032-01-15,1.1.3.017
+Santander- jan30,Itaú,renda_fixa,208300,6.174,2030-01-09,1.1.3.012
+BB,Itaú,renda_fixa,204440,6,2031-03-18,1.1.3.016
+CLN JP MORGAN,Itaú,renda_fixa,200000,5.03,2030-07-09,1.1.3.010
+CLN Bradesco,Itaú,renda_fixa,200000,6.25,2033-02-04,1.1.3.020
+Vale- jul30,Itaú,renda_fixa,196812.5,3.75,2030-07-08,1.1.3.002
+HSBC,Itaú,renda_fixa,191200,4.375,2026-11-23,1.1.3.011
+CLN GLENCORE,Itaú,renda_fixa,190000,5.21,2030-07-09,1.1.3.014
+United Mexican,Itaú,renda_fixa,188392,3.25,2030-04-16,1.1.3.022
+OAKTREE FUND,Itaú,fundo,154119.34,,,1.1.3.015
+Eletrobrás,XP/Bradesco,renda_fixa,151307.5,4.625,2030-02-04,1.1.4.006
+Ultrapar- jun29,XP/Bradesco,renda_fixa,148260,5.25,2029-06-06,1.1.4.005
+Vale- nov36,Itaú,renda_fixa,147570.5,6.875,2036-11-21,1.1.3.005
+AT&T- BRADESCO,XP/Bradesco,renda_fixa,132454.5,2.25,2032-02-01,1.1.4.018
+BB,XP/Bradesco,renda_fixa,124750,6,2031-03-18,1.1.4.009
+Pimco,Itaú,fundo,118314.24,,,1.1.3.001
+Petrobrás-jan40,XP/Bradesco,renda_fixa,107227.5,6.875,2040-01-20,1.1.4.003
+Itaú fev2030,XP/Bradesco,renda_fixa,100500,6,2030-02-27,1.1.4.017
+CLN ARCMITTAL,Itaú,renda_fixa,100000,5.7,2028-01-05,1.1.3.007
+CLN BOFA,Itaú,renda_fixa,100000,5.6,2030-01-07,1.1.3.008
+Bank Amer,XP/Bradesco,renda_fixa,98860,3.974,2030-02-07,1.1.4.011
+Petrobrás- jan31,XP/Bradesco,renda_fixa,97920,5.6,2031-01-03,1.1.4.002
+Jp Morgan,XP/Bradesco,renda_fixa,97845,3.702,2030-05-06,1.1.4.010
+Morgan Stanley,XP/Bradesco,renda_fixa,96705,2.699,2031-01-22,1.1.4.014
+Santander- jul27,XP/Bradesco,renda_fixa,96295,4.4,2027-07-13,1.1.4.004
+Note GLD,Itaú,renda_fixa,96216.23,,,1.1.3.019
+GM- out28,XP/Bradesco,renda_fixa,95800,5,2028-10-01,1.1.4.008
+Dell- out29,XP/Bradesco,renda_fixa,94112.5,5.3,2029-10-01,1.1.4.007
+Bradesco,XP/Bradesco,renda_fixa,82620,6.5,2030-01-22,1.1.4.016
+Wells Fargo & Co,XP/Bradesco,renda_fixa,70026.4,5.198,2030-01-23,1.1.4.015
+CLN HSBC,Itaú,renda_fixa,50000,5.45,2028-01-05,1.1.3.006
+Citigroup,XP/Bradesco,renda_fixa,49270,3.98,2030-03-20,1.1.4.013
+Goldman Sachs,XP/Bradesco,renda_fixa,48895,3.8,2030-03-15,1.1.4.012
+Odebrechet,Itaú,renda_fixa,28710,,,1.1.3.003
+VANG,Itaú,fundo,12200.9,,,1.1.3.009
