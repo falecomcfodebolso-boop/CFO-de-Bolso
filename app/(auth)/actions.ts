@@ -2,7 +2,26 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+
+/**
+ * URL pública do app, usada para montar o link de confirmação de e-mail
+ * que o Supabase manda no cadastro. Sem isso, o Supabase usa a "Site URL"
+ * configurada no painel dele — que, se nunca foi trocada do padrão,
+ * aponta pro localhost usado em desenvolvimento (causa comum do link de
+ * confirmação abrir "localhost" pra quem se cadastra em produção).
+ *
+ * Preferimos o cabeçalho Host da própria requisição (funciona em
+ * qualquer domínio/preview automaticamente); NEXT_PUBLIC_SITE_URL serve
+ * de reforço caso o cabeçalho não esteja disponível.
+ */
+async function getSiteOrigin() {
+  const headerList = await headers();
+  const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
+  const proto = headerList.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
+  if (host) return `${proto}://${host}`;
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+}
 
 export type ActionState = { error?: string; emailNaoConfirmado?: string } | null;
 
@@ -23,10 +42,14 @@ export async function signUpAction(
   }
 
   const supabase = await createClient();
+  const origin = await getSiteOrigin();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: name } },
+    options: {
+      data: { full_name: name },
+      emailRedirectTo: `${origin}/auth/confirm`,
+    },
   });
 
   if (error) return { error: error.message };
@@ -75,7 +98,12 @@ export async function resendConfirmationAction(
   if (!email) return { error: "Informe o e-mail." };
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.resend({ type: "signup", email });
+  const origin = await getSiteOrigin();
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${origin}/auth/confirm` },
+  });
   if (error) return { error: error.message };
 
   return { enviado: true };
