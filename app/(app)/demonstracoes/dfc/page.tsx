@@ -67,26 +67,32 @@ export default async function DfcPage({
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Início</label>
-          <input type="date" name="inicio" defaultValue={inicio} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Fim</label>
-          <input type="date" name="fim" defaultValue={fim} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        <div className="flex flex-wrap items-end gap-3">
+          <span className="w-full text-xs font-semibold text-slate-600">Período atual</span>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Início</label>
+            <input type="date" name="inicio" defaultValue={inicio} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Fim</label>
+            <input type="date" name="fim" defaultValue={fim} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+          </div>
         </div>
         <div className="w-full h-px bg-slate-100 my-1" />
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="comparar" value="1" defaultChecked={comparar} className="rounded border-slate-300" />
-          Comparar com outro período (análise horizontal)
+          Comparar com período anterior (análise horizontal)
         </label>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Início (comparação)</label>
-          <input type="date" name="inicioAnt" defaultValue={inicioAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Fim (comparação)</label>
-          <input type="date" name="fimAnt" defaultValue={fimAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        <div className="flex flex-wrap items-end gap-3">
+          <span className="w-full text-xs font-semibold text-slate-600">Período anterior</span>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Início</label>
+            <input type="date" name="inicioAnt" defaultValue={inicioAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Fim</label>
+            <input type="date" name="fimAnt" defaultValue={fimAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+          </div>
         </div>
         <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
           Atualizar
