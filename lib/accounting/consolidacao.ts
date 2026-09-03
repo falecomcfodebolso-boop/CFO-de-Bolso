@@ -90,7 +90,7 @@ async function getMovimentosIntercompany(
     .lte("data", ate);
   if (desde) query = query.gte("data", desde);
 
-  const { data, error } = await query.returns<(MovimentoClassificado & { intercompany_org_id: string | null })[]>();
+  const { data, error } = await query.returns<(MovimentoClassificado & { org_id: string; intercompany_org_id: string | null })[]>();
   if (error) throw error;
 
   return (data ?? []).filter(
