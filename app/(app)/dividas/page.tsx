@@ -14,7 +14,7 @@ import {
   type Divida,
 } from "@/lib/portfolio/passivos";
 import { getBalanco } from "@/lib/accounting/demonstrativos";
-import { getSaldosPorConta } from "@/lib/accounting/queries";
+import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { sincronizarComSaldoContabil } from "@/lib/accounting/sync";
 
 const NOME_TIPO: Record<string, string> = {
@@ -26,15 +26,21 @@ const NOME_TIPO: Record<string, string> = {
   outro: "Outro",
 };
 
-export default async function DividasPage() {
+export default async function DividasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ data?: string }>;
+}) {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
   const hoje = new Date().toISOString().slice(0, 10);
+  const { data: dataParam } = await searchParams;
+  const dataRef = dataParam || hoje;
 
   const [{ data: dividasData, error }, balanco, saldos] = await Promise.all([
     supabase.from("dividas").select("*").eq("org_id", currentOrgId).order("valor_atual", { ascending: false }),
-    getBalanco(supabase, currentOrgId, hoje),
-    getSaldosPorConta(supabase, currentOrgId),
+    getBalanco(supabase, currentOrgId, dataRef),
+    getSaldosPorContaAteData(supabase, currentOrgId, dataRef),
   ]);
   if (error) throw error;
 
@@ -69,6 +75,20 @@ export default async function DividasPage() {
         </p>
       </div>
 
+      <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Data de referência</label>
+          <input type="date" name="data" defaultValue={dataRef} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
+          Atualizar
+        </button>
+        <span className="text-xs text-slate-400">
+          Todos os saldos e índices desta tela refletem a posição contábil em{" "}
+          {new Date(`${dataRef}T00:00:00Z`).toLocaleDateString("pt-BR")}.
+        </span>
+      </form>
+
       {canWrite(currentMembership.role) && (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="text-sm font-medium text-slate-900 mb-3">Nova dívida</h2>
@@ -91,7 +111,7 @@ export default async function DividasPage() {
         <h2 className="text-sm font-medium text-slate-900 mb-1">Indicadores de endividamento</h2>
         <p className="text-xs text-slate-500 mb-3">
           Calculados a partir do saldo devedor cadastrado nesta tela contra o Ativo e o Patrimônio
-          Líquido apurados na sua contabilidade (Diário/Razão) na data de hoje.
+          Líquido apurados na sua contabilidade (Diário/Razão) na data de referência selecionada acima.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           <div>

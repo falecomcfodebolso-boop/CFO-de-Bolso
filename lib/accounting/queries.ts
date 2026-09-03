@@ -27,6 +27,40 @@ export async function getSaldosPorConta(supabase: SupabaseClient, orgId: string)
   return data ?? [];
 }
 
+/**
+ * Igual a `getSaldosPorConta`, mas calcula o saldo de cada conta somando apenas os
+ * lançamentos até (e incluindo) a data informada — para ver a Carteira, Dívidas ou
+ * qualquer outra tela sincronizada com o contábil "como estava" numa data passada, em
+ * vez do saldo atual (hoje).
+ */
+export async function getSaldosPorContaAteData(
+  supabase: SupabaseClient,
+  orgId: string,
+  ateData: string
+): Promise<SaldoConta[]> {
+  const { data, error } = await supabase
+    .from("v_movimento_contas")
+    .select("conta_code, conta_name, natureza, valor_saldo")
+    .eq("org_id", orgId)
+    .lte("data", ateData);
+
+  if (error) throw error;
+
+  const porConta = new Map<string, SaldoConta>();
+  for (const m of data ?? []) {
+    const atual = porConta.get(m.conta_code) ?? {
+      org_id: orgId,
+      conta_code: m.conta_code,
+      conta_name: m.conta_name,
+      natureza: m.natureza,
+      saldo: 0,
+    };
+    atual.saldo += Number(m.valor_saldo);
+    porConta.set(m.conta_code, atual);
+  }
+  return Array.from(porConta.values()).sort((a, b) => a.conta_code.localeCompare(b.conta_code));
+}
+
 export async function getMovimentoConta(
   supabase: SupabaseClient,
   orgId: string,

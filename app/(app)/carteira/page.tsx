@@ -21,20 +21,26 @@ import {
   diasParaVencimento,
   type Ativo,
 } from "@/lib/portfolio/indices";
-import { totalPorNatureza, getSaldosPorConta } from "@/lib/accounting/queries";
+import { totalPorNatureza, getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { getBalanco } from "@/lib/accounting/demonstrativos";
 import { sincronizarComSaldoContabil } from "@/lib/accounting/sync";
 
-export default async function CarteiraPage() {
+export default async function CarteiraPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ data?: string }>;
+}) {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
   const podeEscrever = canWrite(currentMembership.role);
   const hoje = new Date().toISOString().slice(0, 10);
+  const { data: dataParam } = await searchParams;
+  const dataRef = dataParam || hoje;
 
   const [{ data: ativosData, error }, saldos, { data: primeiroLancamento }, { data: analisesData }] =
     await Promise.all([
       supabase.from("ativos").select("*").eq("org_id", currentOrgId).order("valor_atual", { ascending: false }),
-      getSaldosPorConta(supabase, currentOrgId),
+      getSaldosPorContaAteData(supabase, currentOrgId, dataRef),
       supabase
         .from("lancamentos")
         .select("data")
@@ -85,16 +91,16 @@ export default async function CarteiraPage() {
 
   // ROI do período: resultado ÷ Patrimônio Líquido de abertura (primeiro lançamento registrado).
   const dataAbertura = primeiroLancamento?.data ?? null;
-  const balancoHoje = await getBalanco(supabase, currentOrgId, hoje);
+  const balancoRef = await getBalanco(supabase, currentOrgId, dataRef);
   const balancoAbertura = dataAbertura ? await getBalanco(supabase, currentOrgId, dataAbertura) : null;
   const plAbertura = balancoAbertura?.patrimonioLiquido ?? 0;
   const roiPeriodo = plAbertura ? resultado / plAbertura : null;
-  const endividamento = balancoHoje.patrimonioLiquido ? balancoHoje.passivoTotal / balancoHoje.patrimonioLiquido : 0;
-  const liquidezCorrente = balancoHoje.passivoCirculante ? balancoHoje.ativoCirculante / balancoHoje.passivoCirculante : null;
-  const caixaTotal = balancoHoje.contasAtivoCirculante
+  const endividamento = balancoRef.patrimonioLiquido ? balancoRef.passivoTotal / balancoRef.patrimonioLiquido : 0;
+  const liquidezCorrente = balancoRef.passivoCirculante ? balancoRef.ativoCirculante / balancoRef.passivoCirculante : null;
+  const caixaTotal = balancoRef.contasAtivoCirculante
     .filter((c) => c.name.toLowerCase().includes("caixa"))
     .reduce((acc, c) => acc + c.saldo, 0);
-  const liquidezImediata = balancoHoje.ativoTotal ? caixaTotal / balancoHoje.ativoTotal : 0;
+  const liquidezImediata = balancoRef.ativoTotal ? caixaTotal / balancoRef.ativoTotal : 0;
 
   return (
     <div className="space-y-6">
@@ -122,6 +128,20 @@ export default async function CarteiraPage() {
           </div>
         )}
       </div>
+
+      <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Data de referência</label>
+          <input type="date" name="data" defaultValue={dataRef} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
+          Atualizar
+        </button>
+        <span className="text-xs text-slate-400">
+          Todos os saldos e índices desta tela refletem a posição contábil em{" "}
+          {new Date(`${dataRef}T00:00:00Z`).toLocaleDateString("pt-BR")}.
+        </span>
+      </form>
 
       {podeEscrever && (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
