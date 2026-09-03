@@ -104,10 +104,21 @@ export default async function AjustesPage() {
           </p>
           {Array.from(grupos.entries()).map(([nomeGrupo, g]) => {
             const subtotal = g.itens.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+            const itensPendentes = g.itens.filter((i) => i.pendente_custodiante);
+            const itensConfirmados = g.itens.filter((i) => !i.pendente_custodiante);
+            const temPendentes = itensPendentes.length > 0;
+            const subtotalPendente = itensPendentes.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+            const subtotalConfirmado = itensConfirmados.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
             const saldoContabilAtual = somarSaldo(saldos, g.contaAcruo);
             const ultimoAjuste = ajustes.find((a) => a.nome_grupo === nomeGrupo);
+            // Ao comparar com o banco, usa só as posições já confirmadas pelo custodiante — as
+            // "pending receipt" ainda não têm valor reportado, então entrariam como diferença
+            // artificial de 100% se somadas ao lado do cálculo.
+            const baseCalculoParaComparar = temPendentes ? subtotalConfirmado : subtotal;
             const diferencaCalcBanco =
-              ultimoAjuste != null ? Math.round((subtotal - ultimoAjuste.valor_reportado_banco) * 100) / 100 : null;
+              ultimoAjuste != null
+                ? Math.round((baseCalculoParaComparar - ultimoAjuste.valor_reportado_banco) * 100) / 100
+                : null;
             const bate = diferencaCalcBanco != null && Math.abs(diferencaCalcBanco) < 0.01;
             return (
               <div key={nomeGrupo} className="rounded-lg border border-slate-200 overflow-x-auto">
@@ -123,8 +134,10 @@ export default async function AjustesPage() {
                     <div className="text-sm font-medium text-slate-700">{fmtMoney(saldoContabilAtual)}</div>
                   </div>
                   <div>
-                    <div className="text-[11px] uppercase text-slate-400">Calculado (interno, 30/360)</div>
-                    <div className="text-sm font-medium text-slate-700">{fmtMoney(subtotal)}</div>
+                    <div className="text-[11px] uppercase text-slate-400">
+                      Calculado (interno, 30/360){temPendentes ? " — confirmados" : ""}
+                    </div>
+                    <div className="text-sm font-medium text-slate-700">{fmtMoney(baseCalculoParaComparar)}</div>
                   </div>
                   <div>
                     <div className="text-[11px] uppercase text-slate-400">
@@ -143,6 +156,15 @@ export default async function AjustesPage() {
                       {diferencaCalcBanco != null ? fmtMoney(diferencaCalcBanco) : "—"}
                     </div>
                   </div>
+                  {temPendentes && (
+                    <div className="col-span-2 sm:col-span-4 flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mt-0.5">
+                      <span>
+                        {itensPendentes.length} posição(ões) &ldquo;pending receipt&rdquo; no custodiante — estimativa
+                        30/360 de {fmtMoney(subtotalPendente)}, sem valor do banco para comparar (não entra na
+                        diferença acima).
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <table className="w-full text-sm">
                   <thead className="text-slate-500 text-xs uppercase">
@@ -185,6 +207,24 @@ export default async function AjustesPage() {
                         </tr>
                       );
                     })}
+                    {temPendentes && (
+                      <>
+                        <tr className="border-t border-slate-200 bg-slate-50 text-slate-600">
+                          <td className="px-3 py-2" colSpan={5}>
+                            Subtotal — confirmados pelo custodiante
+                          </td>
+                          <td className="px-3 py-2 text-right">{fmtMoney(subtotalConfirmado)}</td>
+                          <td></td>
+                        </tr>
+                        <tr className="bg-amber-50 text-amber-700">
+                          <td className="px-3 py-2" colSpan={5}>
+                            Subtotal — pending receipt (sem valor do custodiante)
+                          </td>
+                          <td className="px-3 py-2 text-right">{fmtMoney(subtotalPendente)}</td>
+                          <td></td>
+                        </tr>
+                      </>
+                    )}
                     <tr className="border-t border-slate-200 bg-slate-50 font-semibold">
                       <td className="px-3 py-2" colSpan={5}>
                         Subtotal {nomeGrupo}

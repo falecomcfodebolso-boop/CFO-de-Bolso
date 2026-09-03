@@ -71,6 +71,10 @@ export async function registrarAjusteAction(_prev: ActionState, formData: FormDa
     let soma = 0;
     let algumCalculavel = false;
     for (const a of ativosGrupo as AtivoAcruo[]) {
+      // Posições "pending receipt" no custodiante ainda não têm valor reportado pelo banco,
+      // então não entram nesta soma — ela é comparada diretamente com valor_reportado_banco,
+      // que por definição só reflete posições já confirmadas.
+      if (a.pendente_custodiante) continue;
       const r = calcularAcruoInterno(a, dataBase);
       if (r.valor != null) {
         soma += r.valor;
