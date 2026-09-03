@@ -51,7 +51,7 @@ export function MigrarForm({ contasExistentes }: { contasExistentes: ContaExiste
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const campos = useMemo(() => camposDoTipo(tipo), [tipo]);
-  const headers = analise && !analise.erro ? analise.headers : null;
+  const headers = analise && analise.ok ? analise.headers : null;
 
   function mudarTipo(novoTipo: Tipo) {
     setTipo(novoTipo);
@@ -74,7 +74,7 @@ export function MigrarForm({ contasExistentes }: { contasExistentes: ContaExiste
       const res = await analisarArquivoAction(null, fd);
       setAnalise(res);
       setResultado(null);
-      if (!res.erro) {
+      if (res.ok) {
         const sugestao = sugerirMapeamento(res.headers, camposDoTipo(tipo));
         const inicial: Record<string, number> = {};
         for (const c of camposDoTipo(tipo)) inicial[c.campo] = sugestao[c.campo] ?? -1;
@@ -175,7 +175,7 @@ export function MigrarForm({ contasExistentes }: { contasExistentes: ContaExiste
           {isPending && !headers ? "Analisando..." : "Analisar arquivo"}
         </button>
 
-        {analise?.erro && (
+        {analise && !analise.ok && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{analise.erro}</p>
         )}
       </div>
@@ -185,7 +185,7 @@ export function MigrarForm({ contasExistentes }: { contasExistentes: ContaExiste
           <div>
             <h2 className="text-sm font-medium text-slate-900">Confira o arquivo e mapeie as colunas</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              {analise && !analise.erro ? `${analise.totalLinhas} linha(s) de dados encontradas.` : null} A primeira
+              {analise && analise.ok ? `${analise.totalLinhas} linha(s) de dados encontradas.` : null} A primeira
               linha do arquivo deve ser o cabeçalho.
             </p>
           </div>
@@ -202,8 +202,8 @@ export function MigrarForm({ contasExistentes }: { contasExistentes: ContaExiste
                 </tr>
               </thead>
               <tbody>
-                {analise && !analise.erro
-                  ? analise.amostra.map((linha, i) => (
+                {analise && analise.ok
+                  ? analise.amostra.map((linha: string[], i: number) => (
                       <tr key={i}>
                         {headers.map((_, j) => (
                           <td key={j} className="border border-slate-100 px-2 py-1 text-slate-600 whitespace-nowrap">

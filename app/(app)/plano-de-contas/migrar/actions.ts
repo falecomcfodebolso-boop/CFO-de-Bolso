@@ -7,22 +7,25 @@ import { parseDataFlexivel, parseValorFlexivel, ParseError } from "@/lib/import/
 import { normalizarNatureza, normalizarTexto, type Natureza } from "@/lib/import/mapeamento";
 import { classificarConta } from "@/lib/accounting/classificacao";
 
-export type AnaliseArquivo = { erro: string } | { erro?: undefined; headers: string[]; amostra: string[][]; totalLinhas: number };
+export type AnaliseArquivo =
+  | { ok: true; headers: string[]; amostra: string[][]; totalLinhas: number }
+  | { ok: false; erro: string };
 
 /** Lê o arquivo e devolve cabeçalhos + amostra, para a etapa de mapeamento de colunas. */
 export async function analisarArquivoAction(_prev: unknown, formData: FormData): Promise<AnaliseArquivo> {
   const { currentMembership } = await requireOrgContext();
-  if (!canWrite(currentMembership.role)) return { erro: "Seu papel (viewer) não permite importar dados." };
+  if (!canWrite(currentMembership.role)) return { ok: false, erro: "Seu papel (viewer) não permite importar dados." };
 
   const arquivo = formData.get("arquivo");
-  if (!(arquivo instanceof File) || arquivo.size === 0) return { erro: "Selecione um arquivo." };
+  if (!(arquivo instanceof File) || arquivo.size === 0) return { ok: false, erro: "Selecione um arquivo." };
 
   try {
     const buffer = await arquivo.arrayBuffer();
     const { headers, linhas } = await lerArquivoGenerico(arquivo.name, buffer);
-    return { headers, amostra: linhas.slice(0, 8), totalLinhas: linhas.length };
+    return { ok: true, headers, amostra: linhas.slice(0, 8), totalLinhas: linhas.length };
   } catch (e) {
     return {
+      ok: false,
       erro: e instanceof ParseError ? e.message : "Não consegui ler o arquivo. Confira o formato (.csv, .xls, .xlsx).",
     };
   }
