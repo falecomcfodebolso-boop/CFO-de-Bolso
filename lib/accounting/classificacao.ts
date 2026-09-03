@@ -47,7 +47,7 @@ const PALAVRAS_FINANCEIRA_DESPESA = [
   "tarifa banc",
   "encargo financeiro",
 ];
-const PALAVRAS_FINANCEIRA_RECEITA = ["juros ativ", "rendimento", "receita financeira", "juros recebid"];
+const PALAVRAS_FINANCEIRA_RECEITA = ["juros", "rendimento", "receita financeira"];
 const PALAVRAS_CUSTO = ["custo da merc", "cmv", "custo do servi", "csp", "custo de produ", "cpv"];
 const PALAVRAS_IMPOSTO_LUCRO = ["irpj", "csll", "imposto de renda", "contribuição social sobre"];
 const PALAVRAS_DEDUCAO = [
