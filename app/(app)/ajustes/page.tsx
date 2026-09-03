@@ -3,12 +3,21 @@ import { deleteAjusteAction } from "./actions";
 import { NovoAjusteForm } from "./novo-ajuste-form";
 import { fmtMoney } from "@/lib/format";
 import { calcularAcruoInterno, CATEGORIA_ACRUO_LABEL, type AtivoAcruo } from "@/lib/accounting/acruo";
+import { getSaldosPorConta } from "@/lib/accounting/queries";
+
+/** Soma o saldo contábil de uma lista de contas separadas por vírgula (pools compartilhados). */
+function somarSaldo(saldos: { conta_code: string; saldo: number }[], codigos: string): number {
+  return codigos
+    .split(",")
+    .map((c) => c.trim())
+    .reduce((acc, c) => acc + Number(saldos.find((s) => s.conta_code === c)?.saldo ?? 0), 0);
+}
 
 export default async function AjustesPage() {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const podeEscrever = canWrite(currentMembership.role);
 
-  const [{ data: contasData }, { data: ativosData }, { data: ajustesData }] = await Promise.all([
+  const [{ data: contasData }, { data: ativosData }, { data: ajustesData }, saldos] = await Promise.all([
     supabase.from("plano_de_contas").select("code, name").eq("org_id", currentOrgId).order("code"),
     supabase
       .from("ativos")
@@ -25,6 +34,7 @@ export default async function AjustesPage() {
       .eq("org_id", currentOrgId)
       .order("data_base", { ascending: false })
       .order("created_at", { ascending: false }),
+    getSaldosPorConta(supabase, currentOrgId),
   ]);
 
   const contas = contasData ?? [];
@@ -88,8 +98,17 @@ export default async function AjustesPage() {
           <h2 className="text-sm font-semibold text-slate-900">
             Detalhamento por papel <span className="font-normal text-slate-400">(referência: hoje)</span>
           </h2>
+          <p className="text-xs text-slate-400 -mt-2">
+            &ldquo;Informado pelo banco&rdquo; mostra o valor da última apuração registrada para o grupo (veja
+            &ldquo;Nova apuração&rdquo; abaixo). Sem nenhuma apuração registrada ainda, esse campo fica vazio.
+          </p>
           {Array.from(grupos.entries()).map(([nomeGrupo, g]) => {
             const subtotal = g.itens.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+            const saldoContabilAtual = somarSaldo(saldos, g.contaAcruo);
+            const ultimoAjuste = ajustes.find((a) => a.nome_grupo === nomeGrupo);
+            const diferencaCalcBanco =
+              ultimoAjuste != null ? Math.round((subtotal - ultimoAjuste.valor_reportado_banco) * 100) / 100 : null;
+            const bate = diferencaCalcBanco != null && Math.abs(diferencaCalcBanco) < 0.01;
             return (
               <div key={nomeGrupo} className="rounded-lg border border-slate-200 overflow-x-auto">
                 <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-medium text-slate-700 flex items-baseline justify-between">
@@ -97,6 +116,33 @@ export default async function AjustesPage() {
                   <span className="text-xs text-slate-400 font-normal">
                     conta(s): {g.contaAcruo} · receita: {g.contaReceita}
                   </span>
+                </div>
+                <div className="px-3 py-2.5 border-b border-slate-200 bg-white grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <div className="text-[11px] uppercase text-slate-400">Contábil atual</div>
+                    <div className="text-sm font-medium text-slate-700">{fmtMoney(saldoContabilAtual)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase text-slate-400">Calculado (interno, 30/360)</div>
+                    <div className="text-sm font-medium text-slate-700">{fmtMoney(subtotal)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase text-slate-400">
+                      Informado pelo banco
+                      {ultimoAjuste && (
+                        <> ({new Date(`${ultimoAjuste.data_base}T00:00:00Z`).toLocaleDateString("pt-BR")})</>
+                      )}
+                    </div>
+                    <div className="text-sm font-medium text-slate-700">
+                      {ultimoAjuste ? fmtMoney(ultimoAjuste.valor_reportado_banco) : "— (nenhuma apuração registrada)"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase text-slate-400">Diferença (calculado vs. banco)</div>
+                    <div className={`text-sm font-medium ${diferencaCalcBanco == null ? "text-slate-400" : bate ? "text-emerald-700" : "text-amber-700"}`}>
+                      {diferencaCalcBanco != null ? fmtMoney(diferencaCalcBanco) : "—"}
+                    </div>
+                  </div>
                 </div>
                 <table className="w-full text-sm">
                   <thead className="text-slate-500 text-xs uppercase">
