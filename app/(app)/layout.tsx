@@ -21,7 +21,7 @@ import { requireOrgContext } from "@/lib/org";
 import { logoutAction, switchOrgAction } from "../(auth)/actions";
 import { NavLinks, type NavItem } from "./nav-links";
 
-const ICON_CLASS = "h-3.5 w-3.5";
+const ICON_CLASS = "h-3 w-3";
 
 function montarNav(ehBrasilReais: boolean, temVariasEmpresas: boolean): NavItem[] {
   const nav: NavItem[] = [
@@ -95,7 +95,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="border-t border-slate-100 bg-slate-50/60">
-          <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto py-1.5">
+          <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center gap-1 py-1.5">
             <NavLinks items={NAV} variant="compact" />
           </div>
         </nav>

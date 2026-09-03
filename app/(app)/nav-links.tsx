@@ -24,7 +24,7 @@ export function NavLinks({ items, variant = "row" }: { items: NavItem[]; variant
                       ? "bg-slate-900 text-white"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`
-                : `flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs rounded-md px-2.5 py-1.5 transition-colors ${
+                : `flex items-center gap-1 whitespace-nowrap shrink-0 text-xs rounded-md px-2 py-1 transition-colors ${
                     active
                       ? "bg-slate-900 text-white"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
