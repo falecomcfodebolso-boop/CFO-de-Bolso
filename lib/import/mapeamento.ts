@@ -70,6 +70,16 @@ export const CAMPOS_SALDOS: CampoMapeavel[] = [
 // crédito) de um lançamento; uma nova linha do diário (identificada pela coluna Data preenchida)
 // inicia um novo lançamento — linhas seguintes com Data em branco pertencem ao mesmo lançamento,
 // exatamente como planilhas contábeis tradicionalmente organizam isso.
+export const CAMPOS_ATIVOS: CampoMapeavel[] = [
+  { campo: "nome", rotulo: "Nome do ativo", obrigatorio: true, palavrasChave: ["ativo", "nome", "papel"] },
+  { campo: "custodiante", rotulo: "Custodiante/Custódia (opcional)", obrigatorio: false, palavrasChave: ["custodia", "custodiante", "banco"] },
+  { campo: "tipo", rotulo: "Tipo (renda fixa/fundo/ação — opcional)", obrigatorio: false, palavrasChave: ["tipo", "classe"] },
+  { campo: "valor", rotulo: "Valor atual", obrigatorio: true, palavrasChave: ["valor", "amount"] },
+  { campo: "cupom", rotulo: "Taxa/cupom % a.a. (opcional)", obrigatorio: false, palavrasChave: ["cupom", "taxa", "coupon"] },
+  { campo: "vencimento", rotulo: "Data de vencimento (opcional)", obrigatorio: false, palavrasChave: ["vencimento", "maturity"] },
+  { campo: "conta_code", rotulo: "Conta do Plano de Contas (opcional)", obrigatorio: false, palavrasChave: ["conta", "codigo"] },
+];
+
 export const CAMPOS_LANCAMENTOS: CampoMapeavel[] = [
   { campo: "data", rotulo: "Data (preenchida só na 1ª linha de cada lançamento)", obrigatorio: true, palavrasChave: ["data", "date"] },
   { campo: "historico", rotulo: "Histórico/Descrição", obrigatorio: true, palavrasChave: ["historico", "descricao", "memo"] },

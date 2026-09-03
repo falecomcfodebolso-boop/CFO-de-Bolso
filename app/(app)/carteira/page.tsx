@@ -58,13 +58,22 @@ export default async function CarteiraPage() {
           <p className="text-sm text-slate-500">Concentração, rentabilidade e risco da carteira de investimentos.</p>
         </div>
         {canWrite(currentMembership.role) && (
-          <Link
-            href="/carteira/importar"
-            className="shrink-0 inline-flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-md px-3 py-2 hover:bg-slate-800"
-          >
-            <Upload className="h-4 w-4" />
-            Importar de PDF
-          </Link>
+          <div className="shrink-0 flex items-center gap-2">
+            <Link
+              href="/carteira/migrar"
+              className="inline-flex items-center gap-1.5 text-sm border border-slate-300 text-slate-700 rounded-md px-3 py-2 hover:bg-slate-50"
+            >
+              <Upload className="h-4 w-4" />
+              Migrar de planilha
+            </Link>
+            <Link
+              href="/carteira/importar"
+              className="inline-flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-md px-3 py-2 hover:bg-slate-800"
+            >
+              <Upload className="h-4 w-4" />
+              Importar de PDF
+            </Link>
+          </div>
         )}
       </div>
 
