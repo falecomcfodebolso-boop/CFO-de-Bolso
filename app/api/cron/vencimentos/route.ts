@@ -38,16 +38,24 @@ export async function GET(req: NextRequest) {
   let alertasDisparados = 0;
 
   for (const cfg of configs ?? []) {
-    const { data: ativos } = await supabase
-      .from("ativos")
-      .select("id, nome, data_vencimento, org_id")
-      .eq("org_id", cfg.org_id)
-      .not("data_vencimento", "is", null);
+    const [{ data: ativos }, { data: dividas }] = await Promise.all([
+      supabase
+        .from("ativos")
+        .select("id, nome, data_vencimento, org_id")
+        .eq("org_id", cfg.org_id)
+        .not("data_vencimento", "is", null),
+      supabase
+        .from("dividas")
+        .select("id, nome, data_vencimento, org_id")
+        .eq("org_id", cfg.org_id)
+        .not("data_vencimento", "is", null),
+    ]);
 
     const hoje = new Date();
-    for (const ativo of ativos ?? []) {
+    const itensComVencimento = [...(ativos ?? []), ...(dividas ?? [])];
+    for (const item of itensComVencimento) {
       const dias = Math.round(
-        (new Date(ativo.data_vencimento as string).getTime() - hoje.getTime()) / 86_400_000
+        (new Date(item.data_vencimento as string).getTime() - hoje.getTime()) / 86_400_000
       );
       if (cfg.dias_antecedencia.includes(dias)) {
         // Aqui entraria a chamada real ao provedor de push/e-mail (ex: um

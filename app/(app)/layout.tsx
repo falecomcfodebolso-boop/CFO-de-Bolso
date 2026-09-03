@@ -13,6 +13,7 @@ import {
   Settings,
   Network,
   Layers,
+  CreditCard,
 } from "lucide-react";
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
@@ -31,6 +32,7 @@ function montarNav(ehBrasilReais: boolean, temVariasEmpresas: boolean): NavItem[
     { href: "/balancete", label: "Balancete", icon: <Scale className={ICON_CLASS} /> },
     { href: "/demonstracoes", label: "Demonstrações", icon: <FileBarChart className={ICON_CLASS} /> },
     { href: "/carteira", label: "Carteira", icon: <LineChart className={ICON_CLASS} /> },
+    { href: "/dividas", label: "Dívidas", icon: <CreditCard className={ICON_CLASS} /> },
     { href: "/vencimentos", label: "Vencimentos", icon: <BellRing className={ICON_CLASS} /> },
   ];
   if (ehBrasilReais) {

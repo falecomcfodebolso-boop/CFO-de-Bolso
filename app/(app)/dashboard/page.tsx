@@ -14,13 +14,22 @@ export default async function DashboardPage() {
   const despesa = totalPorNatureza(saldos, "DESPESA");
   const resultado = receita - despesa;
 
-  const { data: proximosVencimentos } = await supabase
-    .from("ativos")
-    .select("id, nome, data_vencimento, valor_atual")
-    .eq("org_id", currentOrgId)
-    .not("data_vencimento", "is", null)
-    .order("data_vencimento", { ascending: true })
-    .limit(5);
+  const [{ data: ativosVencendo }, { data: dividasVencendo }] = await Promise.all([
+    supabase
+      .from("ativos")
+      .select("id, nome, data_vencimento")
+      .eq("org_id", currentOrgId)
+      .not("data_vencimento", "is", null),
+    supabase
+      .from("dividas")
+      .select("id, nome, data_vencimento")
+      .eq("org_id", currentOrgId)
+      .not("data_vencimento", "is", null),
+  ]);
+
+  const proximosVencimentos = [...(ativosVencendo ?? []), ...(dividasVencendo ?? [])]
+    .sort((a, b) => (a.data_vencimento! < b.data_vencimento! ? -1 : 1))
+    .slice(0, 5);
 
   const cards = [
     { label: "Ativo Total", value: ativo, tone: "text-slate-900" },
@@ -51,7 +60,7 @@ export default async function DashboardPage() {
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="font-medium text-slate-900 mb-3">Próximos vencimentos</h2>
           {!proximosVencimentos || proximosVencimentos.length === 0 ? (
-            <p className="text-sm text-slate-500">Nenhum ativo com vencimento cadastrado.</p>
+            <p className="text-sm text-slate-500">Nenhum ativo ou dívida com vencimento cadastrado.</p>
           ) : (
             <ul className="divide-y divide-slate-100">
               {proximosVencimentos.map((a) => (
@@ -83,6 +92,9 @@ export default async function DashboardPage() {
             </Link>
             <Link href="/carteira" className="rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50">
               Índices da carteira →
+            </Link>
+            <Link href="/dividas" className="rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50">
+              Dívidas &amp; Passivos →
             </Link>
           </div>
         </div>
