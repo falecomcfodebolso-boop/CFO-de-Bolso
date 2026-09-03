@@ -31,7 +31,7 @@ function toIsoDate(day: string, month: string, year: string): string | null {
 }
 
 /** Aceita dd/mm/yyyy, dd-mm-yyyy ou yyyy-mm-dd. */
-function parseDataFlexivel(raw: string): string | null {
+export function parseDataFlexivel(raw: string): string | null {
   const s = raw.trim();
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
@@ -40,7 +40,7 @@ function parseDataFlexivel(raw: string): string | null {
   return null;
 }
 
-function parseValorFlexivel(raw: string): number | null {
+export function parseValorFlexivel(raw: string): number | null {
   let s = raw.trim().replace(/^R\$\s*/i, "");
   const negativoParenteses = /^\(.*\)$/.test(s);
   s = s.replace(/[()]/g, "");

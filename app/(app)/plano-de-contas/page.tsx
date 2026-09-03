@@ -1,7 +1,7 @@
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovaContaForm } from "./nova-conta-form";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Upload } from "lucide-react";
 
 const NATUREZA_LABEL: Record<string, string> = {
   ATIVO: "1 · Ativo",
@@ -39,13 +39,22 @@ export default async function PlanoDeContasPage() {
           </p>
         </div>
         {canWrite(currentMembership.role) && (
-          <Link
-            href="/plano-de-contas/estruturar"
-            className="shrink-0 inline-flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-md px-3 py-2 hover:bg-slate-800"
-          >
-            <Sparkles className="h-4 w-4" />
-            Estruturar com IA
-          </Link>
+          <div className="shrink-0 flex items-center gap-2">
+            <Link
+              href="/plano-de-contas/migrar"
+              className="inline-flex items-center gap-1.5 text-sm border border-slate-300 text-slate-700 rounded-md px-3 py-2 hover:bg-slate-50"
+            >
+              <Upload className="h-4 w-4" />
+              Migrar dados de outro sistema
+            </Link>
+            <Link
+              href="/plano-de-contas/estruturar"
+              className="inline-flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-md px-3 py-2 hover:bg-slate-800"
+            >
+              <Sparkles className="h-4 w-4" />
+              Estruturar com IA
+            </Link>
+          </div>
         )}
       </div>
 
