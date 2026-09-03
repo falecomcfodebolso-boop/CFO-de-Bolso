@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
-export type ActionState = { error?: string } | null;
+export type ActionState = { error?: string; emailNaoConfirmado?: string } | null;
 
 export async function signUpAction(
   _prev: ActionState,
@@ -47,9 +47,38 @@ export async function loginAction(
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: "E-mail ou senha inválidos." };
+  if (error) {
+    // Supabase distingue "credenciais erradas" de "e-mail ainda não
+    // confirmado" — sem checar isso, alguém que acabou de se cadastrar
+    // (e ainda não clicou no link de confirmação) via a mesma mensagem
+    // genérica de "senha errada", o que é enganoso e não diz o que fazer.
+    if (error.message.toLowerCase().includes("email not confirmed")) {
+      return {
+        error:
+          "Seu e-mail ainda não foi confirmado. Confira sua caixa de entrada (e o spam) pelo link que enviamos no cadastro, ou peça um novo abaixo.",
+        emailNaoConfirmado: email,
+      };
+    }
+    return { error: "E-mail ou senha inválidos." };
+  }
 
   redirect("/dashboard");
+}
+
+export type ResendActionState = { error?: string; enviado?: boolean } | null;
+
+export async function resendConfirmationAction(
+  _prev: ResendActionState,
+  formData: FormData
+): Promise<ResendActionState> {
+  const email = String(formData.get("email") || "").trim();
+  if (!email) return { error: "Informe o e-mail." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resend({ type: "signup", email });
+  if (error) return { error: error.message };
+
+  return { enviado: true };
 }
 
 export async function logoutAction() {
