@@ -16,6 +16,7 @@ export type Membership = {
     regime_tributario: RegimeTributario | null;
     atividade_tributaria: AtividadeTributaria | null;
     aliquota_iss: number | null;
+    data_abertura_atividade: string | null;
   };
 };
 
@@ -43,7 +44,9 @@ export async function requireOrgContext(): Promise<{
 
   const { data: memberships, error } = await supabase
     .from("memberships")
-    .select("org_id, role, organizations(id, name, base_currency, regime_tributario, atividade_tributaria, aliquota_iss)")
+    .select(
+      "org_id, role, organizations(id, name, base_currency, regime_tributario, atividade_tributaria, aliquota_iss, data_abertura_atividade)"
+    )
     .returns<Membership[]>();
 
   if (error) throw error;

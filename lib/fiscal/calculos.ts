@@ -49,6 +49,132 @@ export function calcularMEI(atividade: AtividadeTributaria): CalculoMEI {
   return { regime: "MEI", dasValor: DAS_MEI_2026[atividade], atividade };
 }
 
+// ---------------------------------------------------------------------
+// Situações especiais do MEI
+// ---------------------------------------------------------------------
+
+/** Limite anual de receita bruta do MEI (2026), pra atividade exercida o ano inteiro. */
+export const LIMITE_MEI_ANUAL = 81_000;
+
+/**
+ * Acima de 20% do limite anual, o desenquadramento do MEI é retroativo a
+ * 1º de janeiro do ano-calendário (não apenas dali em diante) — a partir
+ * daí, os tributos de todo o ano devem ser recalculados como Microempresa
+ * (Simples Nacional), descontando o que já foi pago via DAS-MEI.
+ */
+export const FATOR_DESENQUADRAMENTO_RETROATIVO = 1.2;
+
+export type StatusLimiteMEI =
+  | "DENTRO_DO_LIMITE"
+  | "PROXIMO_DO_LIMITE"
+  | "EXCEDIDO_ATE_20_POR_CENTO"
+  | "EXCEDIDO_ACIMA_DE_20_POR_CENTO";
+
+export type CalculoLimiteMEI = {
+  ano: number;
+  receitaBrutaAno: number;
+  mesesDeAtividade: number;
+  limiteProporcional: number;
+  percentualUtilizado: number;
+  excedente: number;
+  status: StatusLimiteMEI;
+  /** 20% (INSS) sobre o excedente — pago como DAS complementar via PGMEI, em janeiro do ano seguinte. */
+  dasComplementarEstimado: number;
+};
+
+/** Quantos meses, dentro do ano informado, a atividade esteve aberta (13 dez → 12 meses cheios). */
+export function mesesDeAtividadeNoAno(ano: number, dataAberturaAtividade: string | null): number {
+  if (!dataAberturaAtividade) return 12;
+  const abertura = new Date(`${dataAberturaAtividade}T00:00:00Z`);
+  const anoAbertura = abertura.getUTCFullYear();
+  if (anoAbertura > ano) return 0;
+  if (anoAbertura < ano) return 12;
+  const mesAbertura = abertura.getUTCMonth(); // 0-11
+  return 12 - mesAbertura;
+}
+
+export function calcularLimiteMEI(params: {
+  ano: number;
+  receitaBrutaAno: number;
+  dataAberturaAtividade: string | null;
+}): CalculoLimiteMEI {
+  const { ano, dataAberturaAtividade } = params;
+  const receitaBrutaAno = Math.max(0, params.receitaBrutaAno);
+  const mesesDeAtividade = mesesDeAtividadeNoAno(ano, dataAberturaAtividade);
+  const limiteProporcional = (LIMITE_MEI_ANUAL / 12) * mesesDeAtividade;
+  const percentualUtilizado = limiteProporcional > 0 ? receitaBrutaAno / limiteProporcional : 0;
+  const excedente = Math.max(0, receitaBrutaAno - limiteProporcional);
+
+  let status: StatusLimiteMEI;
+  if (receitaBrutaAno <= limiteProporcional) {
+    status = percentualUtilizado >= 0.9 ? "PROXIMO_DO_LIMITE" : "DENTRO_DO_LIMITE";
+  } else if (receitaBrutaAno <= limiteProporcional * FATOR_DESENQUADRAMENTO_RETROATIVO) {
+    status = "EXCEDIDO_ATE_20_POR_CENTO";
+  } else {
+    status = "EXCEDIDO_ACIMA_DE_20_POR_CENTO";
+  }
+
+  return {
+    ano,
+    receitaBrutaAno,
+    mesesDeAtividade,
+    limiteProporcional,
+    percentualUtilizado,
+    excedente,
+    status,
+    dasComplementarEstimado: excedente * 0.2,
+  };
+}
+
+/** Vencimento do DAS-MEI de um mês (sempre dia 20; se cair em não-útil, a Receita antecipa — não replicado aqui). */
+export function vencimentoDAS(ano: number, mes: number): string {
+  return new Date(Date.UTC(ano, mes - 1, 20)).toISOString().slice(0, 10);
+}
+
+export type CalculoAtrasoDAS = {
+  vencimento: string;
+  dataReferencia: string;
+  diasAtraso: number;
+  valorOriginal: number;
+  multa: number;
+  juros: number;
+  valorComEncargos: number;
+};
+
+/**
+ * Estimativa de multa (0,33% ao dia, limitada a 20%) e juros (aproximados
+ * pela taxa Selic, aqui simplificada em ~1% ao mês pro dado não estar
+ * disponível offline) sobre um DAS pago em atraso. O valor real, com a
+ * Selic acumulada exata do período, só sai ao reemitir a guia em
+ * atraso pelo app PGMEI/portal do Simples Nacional — use isto só como
+ * estimativa pra se planejar.
+ */
+export function calcularAtrasoDAS(params: {
+  vencimento: string;
+  dataPagamento?: string;
+  valorOriginal: number;
+}): CalculoAtrasoDAS {
+  const { vencimento, valorOriginal } = params;
+  const dataReferencia = params.dataPagamento ?? new Date().toISOString().slice(0, 10);
+  const dVencimento = new Date(`${vencimento}T00:00:00Z`);
+  const dReferencia = new Date(`${dataReferencia}T00:00:00Z`);
+  const diasAtraso = Math.max(0, Math.round((dReferencia.getTime() - dVencimento.getTime()) / (1000 * 60 * 60 * 24)));
+
+  const multa = diasAtraso > 0 ? valorOriginal * Math.min(0.2, 0.0033 * diasAtraso) : 0;
+  const SELIC_MENSAL_APROXIMADA = 0.01;
+  const juros = diasAtraso > 0 ? valorOriginal * SELIC_MENSAL_APROXIMADA * (diasAtraso / 30) : 0;
+
+  return {
+    vencimento,
+    dataReferencia,
+    diasAtraso,
+    valorOriginal,
+    multa,
+    juros,
+    valorComEncargos: valorOriginal + multa + juros,
+  };
+}
+
 export type CalculoPresumido = {
   regime: "LUCRO_PRESUMIDO";
   receitaBrutaTrimestre: number;

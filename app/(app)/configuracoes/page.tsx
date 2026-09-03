@@ -41,6 +41,7 @@ export default async function ConfiguracoesPage() {
               regimeAtual={org.regime_tributario}
               atividadeAtual={org.atividade_tributaria}
               aliquotaIssAtual={org.aliquota_iss}
+              dataAberturaAtual={org.data_abertura_atividade}
             />
           ) : (
             <p className="text-sm text-slate-400">

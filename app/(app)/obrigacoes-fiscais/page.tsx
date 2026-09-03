@@ -4,6 +4,9 @@ import { getDRE } from "@/lib/accounting/demonstrativos";
 import { fmtMoney } from "@/lib/format";
 import {
   calcularMEI,
+  calcularLimiteMEI,
+  calcularAtrasoDAS,
+  vencimentoDAS,
   calcularLucroPresumido,
   calcularLucroReal,
   trimestreDe,
@@ -35,7 +38,7 @@ function LinhaImposto({ label, valor, currency }: { label: string; valor: number
 export default async function ObrigacoesFiscaisPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ano?: string; trimestre?: string }>;
+  searchParams: Promise<{ ano?: string; trimestre?: string; mesDas?: string; dataPagamentoDas?: string }>;
 }) {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const org = currentMembership.organizations;
@@ -69,15 +72,23 @@ export default async function ObrigacoesFiscaisPage({
     );
   }
 
-  const { ano: anoParam, trimestre: trimestreParam } = await searchParams;
-  const atual = trimestreDe(new Date().toISOString().slice(0, 10));
+  const { ano: anoParam, trimestre: trimestreParam, mesDas, dataPagamentoDas } = await searchParams;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const atual = trimestreDe(hoje);
   const ano = anoParam ? parseInt(anoParam, 10) : atual.ano;
   const trimestre = (trimestreParam ? parseInt(trimestreParam, 10) : atual.trimestre) as 1 | 2 | 3 | 4;
   const { inicio, fim } = trimestreParaDatas(ano, trimestre);
 
+  const atividade = org.atividade_tributaria ?? "COMERCIO_INDUSTRIA";
+
   const dre = org.regime_tributario !== "MEI" ? await getDRE(supabase, currentOrgId, inicio, fim) : null;
 
-  const atividade = org.atividade_tributaria ?? "COMERCIO_INDUSTRIA";
+  // Receita bruta acumulada no ano-calendário (1º de jan até hoje, ou até
+  // 31/dez se for um ano anterior) — usada pra checar o limite do MEI.
+  const dreAno =
+    org.regime_tributario === "MEI"
+      ? await getDRE(supabase, currentOrgId, `${ano}-01-01`, ano < atual.ano ? `${ano}-12-31` : hoje)
+      : null;
 
   return (
     <div className="space-y-6">
@@ -106,7 +117,15 @@ export default async function ObrigacoesFiscaisPage({
       </div>
 
       {org.regime_tributario === "MEI" ? (
-        <MEIView atividade={atividade} currency={currency} />
+        <MEIView
+          atividade={atividade}
+          currency={currency}
+          ano={ano}
+          receitaBrutaAno={dreAno?.receitaBruta ?? 0}
+          dataAberturaAtividade={org.data_abertura_atividade}
+          mesDas={mesDas}
+          dataPagamentoDas={dataPagamentoDas}
+        />
       ) : (
         <>
           <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
@@ -168,16 +187,149 @@ export default async function ObrigacoesFiscaisPage({
   );
 }
 
-function MEIView({ atividade, currency }: { atividade: string; currency: string }) {
+const STATUS_LIMITE_LABEL: Record<string, { texto: string; cor: string }> = {
+  DENTRO_DO_LIMITE: { texto: "Dentro do limite", cor: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  PROXIMO_DO_LIMITE: { texto: "Próximo do limite (90%+)", cor: "text-amber-700 bg-amber-50 border-amber-200" },
+  EXCEDIDO_ATE_20_POR_CENTO: { texto: "Limite ultrapassado (até 20%)", cor: "text-orange-700 bg-orange-50 border-orange-200" },
+  EXCEDIDO_ACIMA_DE_20_POR_CENTO: {
+    texto: "Limite ultrapassado em mais de 20%",
+    cor: "text-red-700 bg-red-50 border-red-200",
+  },
+};
+
+function MEIView({
+  atividade,
+  currency,
+  ano,
+  receitaBrutaAno,
+  dataAberturaAtividade,
+  mesDas,
+  dataPagamentoDas,
+}: {
+  atividade: string;
+  currency: string;
+  ano: number;
+  receitaBrutaAno: number;
+  dataAberturaAtividade: string | null;
+  mesDas?: string;
+  dataPagamentoDas?: string;
+}) {
   const calc = calcularMEI(atividade as Parameters<typeof calcularMEI>[0]);
+  const limite = calcularLimiteMEI({ ano, receitaBrutaAno, dataAberturaAtividade });
+  const statusInfo = STATUS_LIMITE_LABEL[limite.status];
+
+  const mesSelecionado = mesDas ? parseInt(mesDas, 10) : new Date().getUTCMonth() + 1;
+  const vencimento = vencimentoDAS(ano, mesSelecionado);
+  const atraso = calcularAtrasoDAS({
+    vencimento,
+    dataPagamento: dataPagamentoDas || undefined,
+    valorOriginal: calc.dasValor,
+  });
+
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 max-w-md">
-      <h2 className="text-sm font-semibold text-slate-900 mb-2">DAS mensal</h2>
-      <LinhaImposto label="Valor fixo do DAS-MEI (2026)" valor={calc.dasValor} currency={currency} />
-      <p className="text-xs text-slate-400 mt-2">
-        O DAS do MEI é um valor fixo (não depende da receita do mês) — inclui INSS e, conforme a
-        atividade, ICMS e/ou ISS. Vence todo dia 20.
-      </p>
+    <div className="space-y-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 max-w-md">
+        <h2 className="text-sm font-semibold text-slate-900 mb-2">DAS mensal</h2>
+        <LinhaImposto label="Valor fixo do DAS-MEI (2026)" valor={calc.dasValor} currency={currency} />
+        <p className="text-xs text-slate-400 mt-2">
+          O DAS do MEI é um valor fixo (não depende da receita do mês) — inclui INSS e, conforme a
+          atividade, ICMS e/ou ISS. Vence todo dia 20.
+        </p>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-4 max-w-md">
+        <h2 className="text-sm font-semibold text-slate-900 mb-2">Limite anual de faturamento — {ano}</h2>
+        <LinhaImposto label="Receita bruta acumulada no ano" valor={limite.receitaBrutaAno} currency={currency} />
+        <LinhaImposto
+          label={
+            limite.mesesDeAtividade < 12
+              ? `Limite proporcional (${limite.mesesDeAtividade} meses de atividade)`
+              : "Limite anual (R$ 81.000)"
+          }
+          valor={limite.limiteProporcional}
+          currency={currency}
+        />
+        <div className={`mt-2 rounded-md border px-3 py-2 text-xs font-medium ${statusInfo.cor}`}>
+          {statusInfo.texto} — {(limite.percentualUtilizado * 100).toFixed(1)}% do limite utilizado
+        </div>
+
+        {limite.status === "EXCEDIDO_ATE_20_POR_CENTO" && (
+          <p className="text-xs text-orange-700 mt-2">
+            Você ultrapassou o limite, mas em até 20% — não há desenquadramento, só é devido um DAS
+            complementar de 20% (INSS) sobre o excedente, pago via PGMEI em janeiro do ano seguinte.
+            Excedente: {fmtMoney(limite.excedente, currency)} · DAS complementar estimado:{" "}
+            <strong>{fmtMoney(limite.dasComplementarEstimado, currency)}</strong>.
+          </p>
+        )}
+
+        {limite.status === "EXCEDIDO_ACIMA_DE_20_POR_CENTO" && (
+          <p className="text-xs text-red-700 mt-2">
+            Você ultrapassou o limite em mais de 20% — isso gera desenquadramento retroativo do MEI a
+            1º de janeiro de {ano}. A partir dessa data, os tributos de todo o ano precisam ser
+            recalculados como Microempresa (Simples Nacional), com direito a descontar os DAS-MEI já
+            pagos. Esse recálculo não é feito automaticamente aqui — procure um contador pra regularizar
+            a situação o quanto antes.
+          </p>
+        )}
+
+        {limite.status === "PROXIMO_DO_LIMITE" && (
+          <p className="text-xs text-amber-700 mt-2">
+            Você já usou 90% ou mais do limite anual — fique de olho pra não ultrapassar sem perceber.
+          </p>
+        )}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-4 max-w-md">
+        <h2 className="text-sm font-semibold text-slate-900 mb-2">Verificar atraso no pagamento do DAS</h2>
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="ano" value={ano} />
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Mês de referência</label>
+            <select name="mesDas" defaultValue={mesSelecionado} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>
+                  {m.toString().padStart(2, "0")}/{ano} (vence {vencimentoDAS(ano, m)})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Data do pagamento</label>
+            <input
+              type="date"
+              name="dataPagamentoDas"
+              defaultValue={dataPagamentoDas || ""}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
+            Calcular
+          </button>
+        </form>
+
+        <div className="mt-3">
+          <LinhaImposto label="Valor original do DAS" valor={atraso.valorOriginal} currency={currency} />
+          {atraso.diasAtraso > 0 ? (
+            <>
+              <LinhaImposto label={`Multa (0,33%/dia × ${atraso.diasAtraso} dias, até 20%)`} valor={atraso.multa} currency={currency} />
+              <LinhaImposto label="Juros (estimativa ~Selic)" valor={atraso.juros} currency={currency} />
+              <div className="pt-2 mt-1 border-t border-slate-200 flex items-center justify-between font-semibold">
+                <span className="text-slate-700">Total estimado com encargos</span>
+                <span className="font-mono text-slate-900">{fmtMoney(atraso.valorComEncargos, currency)}</span>
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                A multa (0,33% ao dia, limitada a 20%) é exata. Os juros aqui usam uma aproximação de
+                ~1% ao mês pró-rata — o valor real usa a taxa Selic acumulada do período e só sai certo
+                ao reemitir a guia em atraso pelo app PGMEI ou pelo portal do Simples Nacional.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-emerald-700 mt-2">
+              Sem atraso: pagamento na data (ou antes do) vencimento de {atraso.vencimento}.
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

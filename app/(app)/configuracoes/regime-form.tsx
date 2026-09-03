@@ -20,10 +20,12 @@ export function RegimeTributarioForm({
   regimeAtual,
   atividadeAtual,
   aliquotaIssAtual,
+  dataAberturaAtual,
 }: {
   regimeAtual: RegimeTributario | null;
   atividadeAtual: AtividadeTributaria | null;
   aliquotaIssAtual: number | null;
+  dataAberturaAtual: string | null;
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     atualizarRegimeTributarioAction,
@@ -49,20 +51,37 @@ export function RegimeTributarioForm({
       </div>
 
       {regime === "MEI" && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Atividade do MEI</label>
-          <select
-            name="atividade_tributaria"
-            defaultValue={atividadeAtual ?? "COMERCIO_INDUSTRIA"}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          >
-            {ATIVIDADES_MEI.map((a) => (
-              <option key={a.value} value={a.value}>
-                {a.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Atividade do MEI</label>
+            <select
+              name="atividade_tributaria"
+              defaultValue={atividadeAtual ?? "COMERCIO_INDUSTRIA"}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              {ATIVIDADES_MEI.map((a) => (
+                <option key={a.value} value={a.value}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Data de abertura da atividade (opcional)
+            </label>
+            <input
+              name="data_abertura_atividade"
+              type="date"
+              defaultValue={dataAberturaAtual ?? ""}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Se o MEI foi aberto no meio do ano, informe a data pra calcularmos o limite anual de
+              faturamento proporcional aos meses de atividade, em vez do limite cheio de R$ 81.000.
+            </p>
+          </div>
+        </>
       )}
 
       {(regime === "LUCRO_PRESUMIDO" || regime === "LUCRO_REAL") && (
