@@ -11,6 +11,8 @@ import {
   FileBarChart,
   Landmark,
   Settings,
+  Network,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
@@ -19,7 +21,7 @@ import { NavLinks, type NavItem } from "./nav-links";
 
 const ICON_CLASS = "h-3.5 w-3.5";
 
-function montarNav(ehBrasilReais: boolean): NavItem[] {
+function montarNav(ehBrasilReais: boolean, temVariasEmpresas: boolean): NavItem[] {
   const nav: NavItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className={ICON_CLASS} /> },
     { href: "/diario", label: "Diário", icon: <BookOpenCheck className={ICON_CLASS} /> },
@@ -34,6 +36,10 @@ function montarNav(ehBrasilReais: boolean): NavItem[] {
   if (ehBrasilReais) {
     nav.push({ href: "/obrigacoes-fiscais", label: "Obrigações Fiscais", icon: <Landmark className={ICON_CLASS} /> });
   }
+  if (temVariasEmpresas) {
+    nav.push({ href: "/participacoes", label: "Participações", icon: <Network className={ICON_CLASS} /> });
+    nav.push({ href: "/consolidado", label: "Consolidado", icon: <Layers className={ICON_CLASS} /> });
+  }
   nav.push({ href: "/cfo-bolso", label: "CFO de Bolso", icon: <MessageCircle className={ICON_CLASS} /> });
   nav.push({ href: "/configuracoes", label: "Configurações", icon: <Settings className={ICON_CLASS} /> });
   return nav;
@@ -41,7 +47,7 @@ function montarNav(ehBrasilReais: boolean): NavItem[] {
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, memberships, currentOrgId, currentMembership } = await requireOrgContext();
-  const NAV = montarNav(currentMembership.organizations?.base_currency === "BRL");
+  const NAV = montarNav(currentMembership.organizations?.base_currency === "BRL", memberships.length > 1);
 
   return (
     <div className="min-h-screen bg-slate-50">

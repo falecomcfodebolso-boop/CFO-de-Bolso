@@ -4,8 +4,9 @@ import { useActionState, useRef, useState, useEffect } from "react";
 import { createLancamentoAction, type ActionState } from "./actions";
 
 type Conta = { code: string; name: string };
+type OutraEmpresa = { id: string; nome: string };
 
-export function NovoLancamentoForm({ contas }: { contas: Conta[] }) {
+export function NovoLancamentoForm({ contas, outrasEmpresas }: { contas: Conta[]; outrasEmpresas: OutraEmpresa[] }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     createLancamentoAction,
     null
@@ -13,6 +14,7 @@ export function NovoLancamentoForm({ contas }: { contas: Conta[] }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [linhas, setLinhas] = useState([0, 1]);
   const nextId = useRef(2);
+  const [intercompany, setIntercompany] = useState(false);
 
   // Limpa os campos nativos do formulário após um lançamento bem-sucedido.
   // Chamamos apenas form.reset() (uma API do DOM, não um setState do React)
@@ -24,6 +26,7 @@ export function NovoLancamentoForm({ contas }: { contas: Conta[] }) {
   useEffect(() => {
     if (!pending && state === null) {
       formRef.current?.reset();
+      setIntercompany(false);
     }
   }, [pending, state]);
 
@@ -89,6 +92,41 @@ export function NovoLancamentoForm({ contas }: { contas: Conta[] }) {
       >
         + adicionar linha
       </button>
+
+      {outrasEmpresas.length > 0 && (
+        <div className="border-t border-slate-100 pt-3">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={intercompany}
+              onChange={(e) => setIntercompany(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            Isto é uma transação com outra empresa do meu grupo (intercompany)
+          </label>
+          {intercompany && (
+            <div className="mt-2">
+              <select
+                name="intercompany_org_id"
+                required
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Empresa contraparte...</option>
+                {outrasEmpresas.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.nome}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-400 mt-1">
+                Marque só o lançamento de receita/despesa e o de contas a receber/pagar em aberto entre
+                as duas empresas — não marque transferências de caixa entre elas (dinheiro que já saiu
+                de uma conta e entrou na outra não deve ser eliminado no consolidado).
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {state?.error && (
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">

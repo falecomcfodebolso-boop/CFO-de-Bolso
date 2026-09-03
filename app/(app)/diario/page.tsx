@@ -3,7 +3,7 @@ import { NovoLancamentoForm } from "./novo-lancamento-form";
 import { fmtDate, fmtMoney } from "@/lib/format";
 
 export default async function DiarioPage() {
-  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
+  const { supabase, currentOrgId, currentMembership, memberships } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
 
   const [{ data: contas }, { data: lancamentos, error }] = await Promise.all([
@@ -30,7 +30,12 @@ export default async function DiarioPage() {
       {canWrite(currentMembership.role) && (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="text-sm font-medium text-slate-900 mb-3">Novo lançamento</h2>
-          <NovoLancamentoForm contas={contas ?? []} />
+          <NovoLancamentoForm
+            contas={contas ?? []}
+            outrasEmpresas={memberships
+              .filter((m) => m.org_id !== currentOrgId)
+              .map((m) => ({ id: m.org_id, nome: m.organizations?.name ?? "(empresa)" }))}
+          />
         </div>
       )}
 

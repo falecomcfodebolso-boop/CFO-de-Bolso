@@ -9,7 +9,7 @@ export async function createLancamentoAction(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
+  const { supabase, currentOrgId, currentMembership, memberships } = await requireOrgContext();
   if (!canWrite(currentMembership.role)) {
     return { error: "Seu papel (viewer) não permite lançar no diário." };
   }
@@ -19,8 +19,13 @@ export async function createLancamentoAction(
   const contas = formData.getAll("linha_conta").map(String);
   const tipos = formData.getAll("linha_tipo").map(String);
   const valores = formData.getAll("linha_valor").map(String);
+  const intercompanyOrgId = String(formData.get("intercompany_org_id") || "").trim() || null;
 
   if (!data || !historico) return { error: "Preencha data e histórico do lançamento." };
+
+  if (intercompanyOrgId && !memberships.some((m) => m.org_id === intercompanyOrgId)) {
+    return { error: "Empresa contraparte intercompany inválida." };
+  }
 
   const linhas = contas
     .map((conta_code, i) => ({
@@ -58,6 +63,7 @@ export async function createLancamentoAction(
     p_data: data,
     p_historico: historico,
     p_linhas: linhas,
+    p_intercompany_org_id: intercompanyOrgId,
   });
 
   if (error) return { error: error.message };
@@ -65,5 +71,6 @@ export async function createLancamentoAction(
   revalidatePath("/diario");
   revalidatePath("/balancete");
   revalidatePath("/razoes");
+  revalidatePath("/consolidado");
   return null;
 }
