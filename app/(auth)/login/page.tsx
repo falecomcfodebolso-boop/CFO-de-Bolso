@@ -1,9 +1,23 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { loginAction, resendConfirmationAction, type ActionState, type ResendActionState } from "../actions";
+
+function CheckEmailBanner({ hide }: { hide: boolean }) {
+  const searchParams = useSearchParams();
+  const acabouDeCriarConta = searchParams.get("check_email") === "1";
+
+  if (!acabouDeCriarConta || hide) return null;
+
+  return (
+    <p className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-4">
+      Conta criada! Enviamos um e-mail de confirmação — clique no link dele antes de entrar aqui
+      (confira também a caixa de spam).
+    </p>
+  );
+}
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
@@ -14,19 +28,14 @@ export default function LoginPage() {
     resendConfirmationAction,
     null
   );
-  const searchParams = useSearchParams();
-  const acabouDeCriarConta = searchParams.get("check_email") === "1";
 
   return (
     <div>
       <h1 className="text-xl font-semibold text-slate-900 mb-4">Entrar</h1>
 
-      {acabouDeCriarConta && !state?.error && (
-        <p className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-4">
-          Conta criada! Enviamos um e-mail de confirmação — clique no link dele antes de entrar aqui
-          (confira também a caixa de spam).
-        </p>
-      )}
+      <Suspense fallback={null}>
+        <CheckEmailBanner hide={!!state?.error} />
+      </Suspense>
 
       <form action={formAction} className="space-y-4">
         <div>
