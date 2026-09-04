@@ -7,11 +7,11 @@ import { ExportButtons } from "../demonstracoes/export-buttons";
 import { TabelaComparativa } from "../demonstracoes/tabela-comparativa";
 
 const GRUPOS: { natureza: SaldoConta["natureza"]; label: string }[] = [
-  { natureza: "ATIVO", label: "1 \u00b7 Ativo" },
-  { natureza: "PASSIVO", label: "2 \u00b7 Passivo" },
-  { natureza: "PL", label: "3 \u00b7 Patrim\u00f4nio L\u00edquido" },
-  { natureza: "RECEITA", label: "4 \u00b7 Receitas" },
-  { natureza: "DESPESA", label: "5 \u00b7 Despesas" },
+  { natureza: "ATIVO", label: "1 · Ativo" },
+  { natureza: "PASSIVO", label: "2 · Passivo" },
+  { natureza: "PL", label: "3 · Patrimônio Líquido" },
+  { natureza: "RECEITA", label: "4 · Receitas" },
+  { natureza: "DESPESA", label: "5 · Despesas" },
 ];
 
 function hoje() {
@@ -29,7 +29,7 @@ function linhasDoGrupo(
   const totalAnt = totalPorNatureza(saldosAnt, natureza);
   const linhas: LinhaAnalise[] = contas.map((c) => ({
     key: c.conta_code,
-    label: `${c.conta_code} \u2014 ${c.conta_name}`,
+    label: `${c.conta_code} — ${c.conta_name}`,
     valor: Number(c.saldo),
     valorAnterior: antPorCodigo.has(c.conta_code) ? Number(antPorCodigo.get(c.conta_code)!.saldo) : null,
     indent: true,
@@ -76,23 +76,23 @@ export default async function BalancetePage({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Balancete</h1>
-          <p className="text-sm text-slate-500">Posi\u00e7\u00e3o consolidada por grupo de contas, na data de refer\u00eancia.</p>
+          <p className="text-sm text-slate-500">Posição consolidada por grupo de contas, na data de referência.</p>
         </div>
         <ExportButtons hrefBase="/api/export/balancete" query={{ data, comparar: comparar ? "1" : "0", dataAnt }} />
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
         <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Data de refer\u00eancia</label>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">Data de referência</label>
           <input type="date" name="data" defaultValue={data} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <div className="w-full h-px bg-slate-100 my-1" />
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="comparar" value="1" defaultChecked={comparar} className="rounded border-slate-300" />
-          Comparar com per\u00edodo anterior (an\u00e1lise horizontal)
+          Comparar com período anterior (análise horizontal)
         </label>
         <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Per\u00edodo anterior</label>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">Período anterior</label>
           <input type="date" name="dataAnt" defaultValue={dataAnt} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </div>
         <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
@@ -104,16 +104,16 @@ export default async function BalancetePage({
         <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3 space-y-1">
           {dataAjustada && dataOriginal && (
             <p>
-              N\u00e3o h\u00e1 dados cont\u00e1beis para {fmtDate(dataOriginal)}
-              {dataOriginal > data ? " (\u00e9 depois do \u00faltimo lan\u00e7amento registrado)" : " (\u00e9 antes do primeiro lan\u00e7amento registrado)"}
-              . Mostrando o {dataOriginal > data ? "\u00faltimo" : "primeiro"} per\u00edodo dispon\u00edvel: <strong>{fmtDate(data)}</strong>.
+              Não há dados contábeis para {fmtDate(dataOriginal)}
+              {dataOriginal > data ? " (é depois do último lançamento registrado)" : " (é antes do primeiro lançamento registrado)"}
+              . Mostrando o {dataOriginal > data ? "último" : "primeiro"} período disponível: <strong>{fmtDate(data)}</strong>.
             </p>
           )}
           {dataAntAjustada && dataAntOriginal && (
             <p>
-              N\u00e3o h\u00e1 dados cont\u00e1beis para {fmtDate(dataAntOriginal)} no per\u00edodo anterior
-              {dataAntOriginal > dataAnt ? " (\u00e9 depois do \u00faltimo lan\u00e7amento registrado)" : " (\u00e9 antes do primeiro lan\u00e7amento registrado)"}
-              . Mostrando o {dataAntOriginal > dataAnt ? "\u00faltimo" : "primeiro"} per\u00edodo dispon\u00edvel: <strong>{fmtDate(dataAnt)}</strong>.
+              Não há dados contábeis para {fmtDate(dataAntOriginal)} no período anterior
+              {dataAntOriginal > dataAnt ? " (é depois do último lançamento registrado)" : " (é antes do primeiro lançamento registrado)"}
+              . Mostrando o {dataAntOriginal > dataAnt ? "último" : "primeiro"} período disponível: <strong>{fmtDate(dataAnt)}</strong>.
             </p>
           )}
         </div>
@@ -121,7 +121,7 @@ export default async function BalancetePage({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <p className="text-xs text-slate-500">Resultado do per\u00edodo</p>
+          <p className="text-xs text-slate-500">Resultado do período</p>
           <p className={`text-2xl font-semibold mt-1 ${resultado >= 0 ? "text-emerald-600" : "text-red-600"}`}>
             {fmtMoney(resultado, currency)}
           </p>
@@ -131,7 +131,7 @@ export default async function BalancetePage({
           <p className="text-2xl font-semibold mt-1 text-slate-900">{fmtMoney(ativo, currency)}</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <p className="text-xs text-slate-500">Verifica\u00e7\u00e3o de fechamento (deve ser 0)</p>
+          <p className="text-xs text-slate-500">Verificação de fechamento (deve ser 0)</p>
           <p className={`text-2xl font-semibold mt-1 ${Math.abs(fechamentoContabil) < 0.01 ? "text-emerald-600" : "text-red-600"}`}>
             {fmtMoney(fechamentoContabil, currency)}
           </p>
@@ -147,7 +147,7 @@ export default async function BalancetePage({
                 <span>{g.label}</span>
                 <span>{fmtMoney(0, currency)}</span>
               </div>
-              <p className="text-sm text-slate-400 px-4 py-3">Sem movimenta\u00e7\u00e3o.</p>
+              <p className="text-sm text-slate-400 px-4 py-3">Sem movimentação.</p>
             </div>
           );
         }

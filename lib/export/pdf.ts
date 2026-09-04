@@ -193,7 +193,7 @@ function novoDocumentoPaisagem(): { doc: PDFKit.PDFDocument; done: Promise<Buffe
 }
 
 function fmtPctPdf(v: number | null): string {
-  if (v == null) return "\u2014";
+  if (v == null) return "—";
   return `${(v * 100).toFixed(1)}%`;
 }
 
@@ -264,17 +264,17 @@ export function desenharLinhasAnalise(
           { texto: fmtMoney(l.valor, currency), largura: largNum, align: "right", bold: negrito },
           { texto: fmtPctPdf(av), largura: largPct, align: "right" },
           {
-            texto: l.valorAnterior == null ? "\u2014" : fmtMoney(l.valorAnterior, currency),
+            texto: l.valorAnterior == null ? "—" : fmtMoney(l.valorAnterior, currency),
             largura: largNum,
             align: "right",
           },
           { texto: fmtPctPdf(avAnterior), largura: largPct, align: "right" },
           {
-            texto: variacao == null ? "\u2014" : fmtMoney(variacao.absoluta, currency),
+            texto: variacao == null ? "—" : fmtMoney(variacao.absoluta, currency),
             largura: largNum,
             align: "right",
           },
-          { texto: variacao == null ? "\u2014" : fmtPctPdf(variacao.pct), largura: largPct, align: "right" },
+          { texto: variacao == null ? "—" : fmtPctPdf(variacao.pct), largura: largPct, align: "right" },
         ]
       : [
           { texto: label, largura: largLabel, bold: negrito },

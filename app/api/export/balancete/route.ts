@@ -11,11 +11,11 @@ import ExcelJS from "exceljs";
 export const runtime = "nodejs";
 
 const GRUPOS: { natureza: SaldoConta["natureza"]; label: string; sheet: string }[] = [
-  { natureza: "ATIVO", label: "1 \u00b7 Ativo", sheet: "Ativo" },
-  { natureza: "PASSIVO", label: "2 \u00b7 Passivo", sheet: "Passivo" },
-  { natureza: "PL", label: "3 \u00b7 Patrim\u00f4nio L\u00edquido", sheet: "PL" },
-  { natureza: "RECEITA", label: "4 \u00b7 Receitas", sheet: "Receitas" },
-  { natureza: "DESPESA", label: "5 \u00b7 Despesas", sheet: "Despesas" },
+  { natureza: "ATIVO", label: "1 · Ativo", sheet: "Ativo" },
+  { natureza: "PASSIVO", label: "2 · Passivo", sheet: "Passivo" },
+  { natureza: "PL", label: "3 · Patrimônio Líquido", sheet: "PL" },
+  { natureza: "RECEITA", label: "4 · Receitas", sheet: "Receitas" },
+  { natureza: "DESPESA", label: "5 · Despesas", sheet: "Despesas" },
 ];
 
 function hoje() {
@@ -29,7 +29,7 @@ function linhasDoGrupo(saldos: SaldoConta[], saldosAnt: SaldoConta[], natureza: 
   const totalAnt = totalPorNatureza(saldosAnt, natureza);
   const linhas: LinhaAnalise[] = contas.map((c) => ({
     key: c.conta_code,
-    label: `${c.conta_code} \u2014 ${c.conta_name}`,
+    label: `${c.conta_code} — ${c.conta_name}`,
     valor: Number(c.saldo),
     valorAnterior: antPorCodigo.has(c.conta_code) ? Number(antPorCodigo.get(c.conta_code)!.saldo) : null,
     indent: true,
@@ -56,8 +56,8 @@ export async function GET(req: NextRequest) {
   ]);
 
   const periodo = comparar
-    ? `Posi\u00e7\u00e3o em ${fmtDate(data)} \u00b7 comparado a ${fmtDate(dataAnt)}`
-    : `Posi\u00e7\u00e3o em ${fmtDate(data)}`;
+    ? `Posição em ${fmtDate(data)} · comparado a ${fmtDate(dataAnt)}`
+    : `Posição em ${fmtDate(data)}`;
 
   const currency = currentMembership.organizations?.base_currency ?? "USD";
 
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
       valorAnterior: comparar ? totalAnt : null,
       subtotal: true,
     });
-    return { titulo: `Balancete \u2014 ${g.label}`, sheet: g.sheet, linhas, baseAV: total || 1, baseAVAnterior: totalAnt || 1 };
+    return { titulo: `Balancete — ${g.label}`, sheet: g.sheet, linhas, baseAV: total || 1, baseAVAnterior: totalAnt || 1 };
   });
 
   if (formato === "pdf") {

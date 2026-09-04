@@ -7,7 +7,7 @@ import { fmtDate } from "@/lib/format";
 const NUMFMT = '#,##0.00;[Red]-#,##0.00';
 
 function fmtPctExport(v: number | null): string {
-  if (v == null) return "\u2014";
+  if (v == null) return "—";
   return `${(v * 100).toFixed(1)}%`;
 }
 

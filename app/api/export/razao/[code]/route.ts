@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
   }, []);
 
   const doPeriodo = comSaldo.filter((m) => m.data >= dataInicio && m.data <= dataFim);
-  const contaLabel = `${contaCode} \u2014 ${movimentos[0]?.conta_name ?? contaCode}`;
+  const contaLabel = `${contaCode} — ${movimentos[0]?.conta_name ?? contaCode}`;
 
   let periodo = `${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`;
   if (comparar) {
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       [...comSaldo].reverse().find((m) => m.data <= dataFim)?.saldoCorrido ?? 0
     );
     const variacao = saldoFinal - saldoFinalAnt;
-    periodo += ` \u00b7 comparado a ${fmtDate(ant.inicio)} a ${fmtDate(ant.fim)} (saldo final anterior: ${saldoFinalAnt.toFixed(2)}, varia\u00e7\u00e3o: ${variacao.toFixed(2)})`;
+    periodo += ` · comparado a ${fmtDate(ant.inicio)} a ${fmtDate(ant.fim)} (saldo final anterior: ${saldoFinalAnt.toFixed(2)}, variação: ${variacao.toFixed(2)})`;
   }
 
   const linhasExport: LinhaMovimento[] = doPeriodo.map((m) => ({
