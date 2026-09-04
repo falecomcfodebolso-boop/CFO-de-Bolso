@@ -315,8 +315,7 @@ function resolverAnoTransacaoChecking(mes: number, periodo: PeriodoExtrato | nul
 function parsePDFContaCorrenteBradescoBank(texto: string): TransacaoExtraida[] {
   const periodo = extrairPeriodoDeclarado(texto);
   const linhas = texto
-    .split(/?
-/)
+    .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
   const transacoes: TransacaoExtraida[] = [];
