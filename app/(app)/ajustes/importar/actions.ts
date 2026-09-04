@@ -38,6 +38,7 @@ export type PropostaMarcacao = {
 export type ParseAcruoState = {
   error?: string;
   dataBase?: string;
+  formato?: "itau" | "pershing";
   propostas?: PropostaApuracao[];
   naoReconhecidas?: EntradaAcruoExtrato[];
   propostasMercado?: PropostaMarcacao[];
@@ -214,7 +215,7 @@ export async function parseExtratoAcruoPdfAction(
       .filter((p): p is PropostaMarcacao => p != null);
   }
 
-  return { dataBase, propostas, naoReconhecidas, propostasMercado };
+  return { dataBase, formato: parseado.formato, propostas, naoReconhecidas, propostasMercado };
 }
 
 export async function confirmarApuracoesAction(

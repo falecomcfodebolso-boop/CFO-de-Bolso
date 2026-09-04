@@ -41,7 +41,10 @@ export function ImportarApuracaoForm() {
 
   if (parseState?.propostas && linhas === null && registradas === null) {
     setLinhas(parseState.propostas.map((p) => ({ ...p, incluir: true })));
-    if (!fonte) setFonte(`Extrato Itaú Private Bank ${fmtDataBR(parseState.dataBase ?? "")}`);
+    if (!fonte) {
+      const nomeFonte = parseState.formato === "pershing" ? "Extrato Bradesco Bank (Pershing)" : "Extrato Itaú Private Bank";
+      setFonte(`${nomeFonte} ${fmtDataBR(parseState.dataBase ?? "")}`);
+    }
   }
   if (parseState?.propostasMercado && linhasMercado === null && registradasMercado === null) {
     setLinhasMercado(parseState.propostasMercado.map((p) => ({ ...p, incluir: true })));
@@ -102,7 +105,7 @@ export function ImportarApuracaoForm() {
       <form action={parseAction} className="space-y-4 max-w-lg">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            PDF do Statement (Itaú Private Bank)
+            PDF do Statement (Itaú Private Bank ou Bradesco Bank / Pershing)
           </label>
           <input
             type="file"
