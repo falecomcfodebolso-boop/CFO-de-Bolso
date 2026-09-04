@@ -1,8 +1,15 @@
 import ExcelJS from "exceljs";
 import type { Balanco, Dfc, Dmpl, Dre } from "@/lib/accounting/demonstrativos";
+import type { LinhaAnalise } from "@/lib/accounting/analise";
+import { calcAV, calcVariacao } from "@/lib/accounting/analise";
 import { fmtDate } from "@/lib/format";
 
 const NUMFMT = '#,##0.00;[Red]-#,##0.00';
+
+function fmtPctExport(v: number | null): string {
+  if (v == null) return "\u2014";
+  return `${(v * 100).toFixed(1)}%`;
+}
 
 function addCabecalho(ws: ExcelJS.Worksheet, titulo: string, orgName: string, periodo: string) {
   ws.mergeCells("A1:C1");
@@ -121,4 +128,124 @@ export function buildDmplSheet(wb: ExcelJS.Workbook, dmpl: Dmpl, orgName: string
 export async function workbookToBuffer(wb: ExcelJS.Workbook): Promise<Buffer> {
   const arrayBuffer = await wb.xlsx.writeBuffer();
   return Buffer.from(arrayBuffer);
+}
+
+
+// =====================================================================
+// Exportadores genéricos (Balancete e Razões) — operam sobre LinhaAnalise[]
+// em vez dos tipos específicos de cada demonstração (Dre/Balanco/Dfc/Dmpl).
+// =====================================================================
+
+export type LinhaMovimento = {
+  data: string;
+  lancamentoNumero: number | string;
+  historico: string;
+  tipo: "D" | "C";
+  valor: number;
+  saldoCorrido: number;
+};
+
+export function buildLinhasSheet(
+  wb: ExcelJS.Workbook,
+  opts: {
+    titulo: string;
+    sheetName?: string;
+    linhas: LinhaAnalise[];
+    baseAV: number;
+    baseAVAnterior: number;
+    orgName: string;
+    periodo: string;
+    comparar: boolean;
+  }
+) {
+  const { titulo, sheetName, linhas, baseAV, baseAVAnterior, orgName, periodo, comparar } = opts;
+  const ws = wb.addWorksheet((sheetName ?? titulo).slice(0, 31));
+  ws.columns = comparar
+    ? [{ width: 42 }, { width: 16 }, { width: 10 }, { width: 16 }, { width: 10 }, { width: 16 }, { width: 10 }]
+    : [{ width: 42 }, { width: 16 }, { width: 10 }];
+
+  const ultimaColuna = comparar ? "G" : "C";
+  ws.mergeCells(`A1:${ultimaColuna}1`);
+  ws.getCell("A1").value = titulo;
+  ws.getCell("A1").font = { bold: true, size: 14 };
+  ws.mergeCells(`A2:${ultimaColuna}2`);
+  ws.getCell("A2").value = orgName;
+  ws.getCell("A2").font = { size: 10, color: { argb: "FF64748B" } };
+  ws.mergeCells(`A3:${ultimaColuna}3`);
+  ws.getCell("A3").value = periodo;
+  ws.getCell("A3").font = { size: 10, color: { argb: "FF64748B" } };
+  ws.addRow([]);
+
+  const header = ws.addRow(
+    comparar
+      ? ["Conta", "Valor", "AV %", "Período anterior", "AV % ant.", "Variação", "AH %"]
+      : ["Conta", "Valor", "AV %"]
+  );
+  header.font = { bold: true };
+  header.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } }));
+
+  for (const l of linhas) {
+    const av = l.semAV ? null : calcAV(l.valor, baseAV);
+    const avAnterior = l.semAV ? null : calcAV(l.valorAnterior ?? 0, baseAVAnterior);
+    const variacao = comparar ? calcVariacao(l.valor, l.valorAnterior) : null;
+
+    const row = comparar
+      ? ws.addRow([
+          l.label,
+          l.valor,
+          fmtPctExport(av),
+          l.valorAnterior ?? null,
+          fmtPctExport(avAnterior),
+          variacao?.absoluta ?? null,
+          fmtPctExport(variacao?.pct ?? null),
+        ])
+      : ws.addRow([l.label, l.valor, fmtPctExport(av)]);
+
+    if (l.indent) row.getCell(1).alignment = { indent: 1 };
+    if (l.subtotal || l.destaque) row.font = { bold: true };
+    row.getCell(2).numFmt = NUMFMT;
+    if (comparar) {
+      row.getCell(4).numFmt = NUMFMT;
+      row.getCell(6).numFmt = NUMFMT;
+    }
+  }
+  return ws;
+}
+
+export function buildRazaoDetalheSheet(
+  wb: ExcelJS.Workbook,
+  opts: { contaLabel: string; movimentos: LinhaMovimento[]; orgName: string; periodo: string }
+) {
+  const { contaLabel, movimentos, orgName, periodo } = opts;
+  const ws = wb.addWorksheet("Razão");
+  ws.columns = [{ width: 14 }, { width: 12 }, { width: 40 }, { width: 12 }, { width: 16 }, { width: 16 }];
+
+  ws.mergeCells("A1:F1");
+  ws.getCell("A1").value = contaLabel;
+  ws.getCell("A1").font = { bold: true, size: 14 };
+  ws.mergeCells("A2:F2");
+  ws.getCell("A2").value = orgName;
+  ws.getCell("A2").font = { size: 10, color: { argb: "FF64748B" } };
+  ws.mergeCells("A3:F3");
+  ws.getCell("A3").value = periodo;
+  ws.getCell("A3").font = { size: 10, color: { argb: "FF64748B" } };
+  ws.addRow([]);
+
+  const header = ws.addRow(["Data", "Nº Lçto", "Histórico", "Natureza", "Valor", "Saldo"]);
+  header.font = { bold: true };
+  header.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } }));
+
+  for (const m of movimentos) {
+    const row = ws.addRow([
+      m.data,
+      m.lancamentoNumero,
+      m.historico,
+      m.tipo === "D" ? "Débito" : "Crédito",
+      m.valor,
+      m.saldoCorrido,
+    ]);
+    row.getCell(5).numFmt = NUMFMT;
+    row.getCell(6).numFmt = NUMFMT;
+  }
+  return ws;
 }

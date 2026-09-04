@@ -18,6 +18,8 @@ export type LinhaAnalise = {
   destaque?: boolean;
   /** Pula a coluna de AV nessa linha (ex: linha de resultado que já é a soma de outras). */
   semAV?: boolean;
+  /** Se definido, o label vira um link (ex: Balancete/Razões linkando para o razão da conta). Ignorado nas exportações Excel/PDF, que mostram só o texto. */
+  href?: string;
 };
 
 /** % de `valor` sobre `base`. Retorna null se a base for zero (divisão indefinida). */

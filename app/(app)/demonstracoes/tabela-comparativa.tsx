@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { fmtMoney } from "@/lib/format";
 import { calcAV, calcVariacao, type LinhaAnalise } from "@/lib/accounting/analise";
 
@@ -66,7 +67,13 @@ export function TabelaComparativa({
                       negrito ? "font-medium" : ""
                     } ${l.destaque ? "text-slate-900" : ""}`}
                   >
-                    {l.label}
+                    {l.href ? (
+                      <Link href={l.href} className="hover:underline">
+                        {l.label}
+                      </Link>
+                    ) : (
+                      l.label
+                    )}
                   </td>
                   <td
                     className={`px-4 py-2.5 text-right font-mono whitespace-nowrap ${

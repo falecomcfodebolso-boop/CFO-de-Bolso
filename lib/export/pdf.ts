@@ -1,5 +1,7 @@
 import PDFDocument from "pdfkit";
 import type { Balanco, Dfc, Dmpl, Dre } from "@/lib/accounting/demonstrativos";
+import type { LinhaAnalise } from "@/lib/accounting/analise";
+import { calcAV, calcVariacao } from "@/lib/accounting/analise";
 import { fmtDate, fmtMoney } from "@/lib/format";
 
 function novoDocumento(): { doc: PDFKit.PDFDocument; done: Promise<Buffer> } {
@@ -162,6 +164,189 @@ export async function buildRelatorioCompletoPdf(
   desenharDfc(doc, args.dfc, currency, orgName);
   doc.addPage();
   desenharDmpl(doc, args.dmpl, currency, orgName);
+  doc.end();
+  return done;
+}
+
+
+// =====================================================================
+// Exportadores genéricos (Balancete e Razões) — operam sobre LinhaAnalise[]
+// em vez dos tipos específicos de cada demonstração (Dre/Balanco/Dfc/Dmpl).
+// Usam paisagem (landscape) porque a tabela comparativa tem até 7 colunas.
+// =====================================================================
+
+export type LinhaMovimentoPdf = {
+  data: string;
+  lancamentoNumero: number | string;
+  historico: string;
+  tipo: "D" | "C";
+  valor: number;
+  saldoCorrido: number;
+};
+
+function novoDocumentoPaisagem(): { doc: PDFKit.PDFDocument; done: Promise<Buffer> } {
+  const doc = new PDFDocument({ margin: 40, size: "A4", layout: "landscape", bufferPages: true });
+  const chunks: Buffer[] = [];
+  doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+  const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
+  return { doc, done };
+}
+
+function fmtPctPdf(v: number | null): string {
+  if (v == null) return "\u2014";
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+type Coluna = { texto: string; largura: number; align?: "left" | "right"; bold?: boolean; cor?: string };
+
+function linhaColunas(doc: PDFKit.PDFDocument, colunas: Coluna[], opts: { bold?: boolean } = {}) {
+  const y = doc.y;
+  let x = doc.page.margins.left;
+  for (const col of colunas) {
+    doc
+      .font(col.bold || opts.bold ? "Helvetica-Bold" : "Helvetica")
+      .fontSize(9)
+      .fillColor(col.cor ?? "#0f172a")
+      .text(col.texto, x, y, { width: col.largura, align: col.align ?? "left" });
+    x += col.largura;
+  }
+  doc.fillColor("#000000");
+  doc.moveDown(0.35);
+}
+
+export function desenharLinhasAnalise(
+  doc: PDFKit.PDFDocument,
+  opts: {
+    titulo: string;
+    linhas: LinhaAnalise[];
+    baseAV: number;
+    baseAVAnterior: number;
+    currency: string;
+    orgName: string;
+    periodo: string;
+    comparar: boolean;
+  }
+) {
+  const { titulo, linhas, baseAV, baseAVAnterior, currency, orgName, periodo, comparar } = opts;
+  cabecalho(doc, titulo, orgName, periodo);
+
+  const largLabel = comparar ? 200 : 380;
+  const largNum = comparar ? 85 : 100;
+  const largPct = comparar ? 55 : 65;
+
+  const header: Coluna[] = comparar
+    ? [
+        { texto: "Conta", largura: largLabel },
+        { texto: "Valor", largura: largNum, align: "right" },
+        { texto: "AV %", largura: largPct, align: "right" },
+        { texto: "Período ant.", largura: largNum, align: "right" },
+        { texto: "AV % ant.", largura: largPct, align: "right" },
+        { texto: "Variação", largura: largNum, align: "right" },
+        { texto: "AH %", largura: largPct, align: "right" },
+      ]
+    : [
+        { texto: "Conta", largura: largLabel },
+        { texto: "Valor", largura: largNum, align: "right" },
+        { texto: "AV %", largura: largPct, align: "right" },
+      ];
+  linhaColunas(doc, header, { bold: true });
+  doc.moveDown(0.1);
+
+  for (const l of linhas) {
+    const av = l.semAV ? null : calcAV(l.valor, baseAV);
+    const avAnterior = l.semAV ? null : calcAV(l.valorAnterior ?? 0, baseAVAnterior);
+    const variacao = comparar ? calcVariacao(l.valor, l.valorAnterior) : null;
+    const negrito = l.subtotal || l.destaque;
+    const label = l.indent ? `   ${l.label}` : l.label;
+    const cols: Coluna[] = comparar
+      ? [
+          { texto: label, largura: largLabel, bold: negrito },
+          { texto: fmtMoney(l.valor, currency), largura: largNum, align: "right", bold: negrito },
+          { texto: fmtPctPdf(av), largura: largPct, align: "right" },
+          {
+            texto: l.valorAnterior == null ? "\u2014" : fmtMoney(l.valorAnterior, currency),
+            largura: largNum,
+            align: "right",
+          },
+          { texto: fmtPctPdf(avAnterior), largura: largPct, align: "right" },
+          {
+            texto: variacao == null ? "\u2014" : fmtMoney(variacao.absoluta, currency),
+            largura: largNum,
+            align: "right",
+          },
+          { texto: variacao == null ? "\u2014" : fmtPctPdf(variacao.pct), largura: largPct, align: "right" },
+        ]
+      : [
+          { texto: label, largura: largLabel, bold: negrito },
+          { texto: fmtMoney(l.valor, currency), largura: largNum, align: "right", bold: negrito },
+          { texto: fmtPctPdf(av), largura: largPct, align: "right" },
+        ];
+    linhaColunas(doc, cols);
+  }
+}
+
+export async function buildLinhasPdf(opts: {
+  titulo: string;
+  linhas: LinhaAnalise[];
+  baseAV: number;
+  baseAVAnterior: number;
+  currency: string;
+  orgName: string;
+  periodo: string;
+  comparar: boolean;
+}): Promise<Buffer> {
+  const { doc, done } = novoDocumentoPaisagem();
+  desenharLinhasAnalise(doc, opts);
+  doc.end();
+  return done;
+}
+
+export async function buildRelatorioLinhasPdf(
+  secoes: { titulo: string; linhas: LinhaAnalise[]; baseAV: number; baseAVAnterior: number }[],
+  comum: { currency: string; orgName: string; periodo: string; comparar: boolean }
+): Promise<Buffer> {
+  const { doc, done } = novoDocumentoPaisagem();
+  secoes.forEach((s, i) => {
+    if (i > 0) doc.addPage();
+    desenharLinhasAnalise(doc, { ...s, ...comum });
+  });
+  doc.end();
+  return done;
+}
+
+export async function buildRazaoDetalhePdf(opts: {
+  contaLabel: string;
+  movimentos: LinhaMovimentoPdf[];
+  currency: string;
+  orgName: string;
+  periodo: string;
+}): Promise<Buffer> {
+  const { contaLabel, movimentos, currency, orgName, periodo } = opts;
+  const { doc, done } = novoDocumento();
+  cabecalho(doc, contaLabel, orgName, periodo);
+
+  const header: Coluna[] = [
+    { texto: "Data", largura: 65 },
+    { texto: "Nº Lçto", largura: 55 },
+    { texto: "Histórico", largura: 190 },
+    { texto: "Natureza", largura: 65, align: "right" },
+    { texto: "Valor", largura: 60, align: "right" },
+    { texto: "Saldo", largura: 60, align: "right" },
+  ];
+  linhaColunas(doc, header, { bold: true });
+  doc.moveDown(0.1);
+
+  for (const m of movimentos) {
+    linhaColunas(doc, [
+      { texto: fmtDate(m.data), largura: 65 },
+      { texto: `#${m.lancamentoNumero}`, largura: 55 },
+      { texto: m.historico, largura: 190 },
+      { texto: m.tipo === "D" ? "Débito" : "Crédito", largura: 65, align: "right" },
+      { texto: fmtMoney(m.valor, currency), largura: 60, align: "right" },
+      { texto: fmtMoney(m.saldoCorrido, currency), largura: 60, align: "right", bold: true },
+    ]);
+  }
+
   doc.end();
   return done;
 }
