@@ -134,8 +134,9 @@ export function NovoAjusteForm({
         <p className="sm:col-span-4 text-xs text-slate-500">
           O cálculo interno papel a papel deste grupo (soma dos Ativos cadastrados) será calculado
           automaticamente na data-base informada e mostrado no histórico abaixo, só para
-          comparação — o valor lançado na contabilidade é sempre o do campo &quot;Valor no extrato do
-          banco&quot;.
+          comparação. Isso só registra a apuração para revisão — nenhum lançamento é gerado ainda.
+          Depois de conferir os números na tabela abaixo, clique em &quot;Lançar no Diário&quot; para
+          confirmar e gerar o lançamento contábil da diferença.
         </p>
       )}
 

@@ -1,5 +1,6 @@
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { deleteAjusteAction } from "./actions";
+import { LancarAjusteButton } from "./lancar-ajuste-button";
 import { NovoAjusteForm } from "./novo-ajuste-form";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { calcularAcruoInterno, CATEGORIA_ACRUO_LABEL, type AtivoAcruo } from "@/lib/accounting/acruo";
@@ -309,15 +310,16 @@ export default async function AjustesPage({
               <th className="text-right px-3 py-2">Contábil (antes)</th>
               <th className="text-right px-3 py-2">Banco/extrato</th>
               <th className="text-right px-3 py-2">Cálculo interno</th>
-              <th className="text-right px-3 py-2">Diferença lançada</th>
+              <th className="text-right px-3 py-2">Diferença</th>
               <th className="text-left px-3 py-2">Fonte</th>
+              <th className="text-right px-3 py-2">Status</th>
               {podeEscrever && <th></th>}
             </tr>
           </thead>
           <tbody>
             {ajustes.length === 0 && (
               <tr>
-                <td colSpan={podeEscrever ? 9 : 8} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={podeEscrever ? 10 : 9} className="px-3 py-6 text-center text-slate-400">
                   Nenhuma apuração de acruamento registrada ainda.
                 </td>
               </tr>
@@ -336,6 +338,23 @@ export default async function AjustesPage({
                   {fmtMoney(a.diferenca)}
                 </td>
                 <td className="px-3 py-2 text-slate-500">{a.fonte || "—"}</td>
+                <td className="px-3 py-2 text-right">
+                  {a.lancamento_id ? (
+                    <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                      Lançado
+                    </span>
+                  ) : Math.abs(a.diferenca) < 0.01 ? (
+                    <span className="text-xs font-medium text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+                      Sem diferença
+                    </span>
+                  ) : podeEscrever ? (
+                    <LancarAjusteButton id={a.id} />
+                  ) : (
+                    <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                      Pendente de lançamento
+                    </span>
+                  )}
+                </td>
                 {podeEscrever && (
                   <td className="px-3 py-2 text-right">
                     <form action={deleteAjusteAction}>

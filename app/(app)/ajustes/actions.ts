@@ -18,16 +18,26 @@ function somarSaldo(saldos: { conta_code: string; saldo: number }[], codigos: st
   return lista.reduce((acc, c) => acc + Number(saldos.find((s) => s.conta_code === c)?.saldo ?? 0), 0);
 }
 
+function revalidarTelasContabeis() {
+  revalidatePath("/ajustes");
+  revalidatePath("/diario");
+  revalidatePath("/balancete");
+  revalidatePath("/razoes");
+  revalidatePath("/demonstracoes/dre");
+  revalidatePath("/consolidado");
+}
+
 /**
  * Registra a leitura do extrato/valuation statement de um grupo de acruo (valor informado pelo
- * banco/custodiante na data-base), compara com o saldo já reconhecido na contabilidade (podendo
- * somar mais de uma conta, quando o grupo compartilha um pool de contas) e — quando há diferença —
- * gera automaticamente o lançamento de ajuste entre a conta de acruo e a conta de receita
- * correspondente (a primeira de cada lista, quando o grupo tem mais de uma). Também calcula, quando
- * o grupo tem Ativos cadastrados com o detalhamento necessário (valor face, taxa, cronograma ou
- * data de início da aplicação), a soma do cálculo interno papel a papel (30/360) de todos os papéis
- * de renda fixa do grupo, só para comparação/justificativa — o valor efetivamente reconhecido na
- * contabilidade é sempre o do extrato do banco.
+ * banco/custodiante na data-base) e compara com o saldo já reconhecido na contabilidade (podendo
+ * somar mais de uma conta, quando o grupo compartilha um pool de contas) — junto com o cálculo
+ * interno papel a papel (30/360), quando o grupo tem Ativos cadastrados com o detalhamento
+ * necessário, só para comparação/justificativa.
+ *
+ * Este passo só REGISTRA a apuração para revisão — não gera lançamento nenhum. O lançamento
+ * contábil da diferença só é gerado depois, quando o responsável aprova os números e clica em
+ * "Lançar no Diário" (ver lancarAjusteAction), evitando que um valor digitado errado ou uma
+ * apuração ainda em conferência vire lançamento automaticamente.
  */
 export async function registrarAjusteAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
@@ -87,11 +97,68 @@ export async function registrarAjusteAction(_prev: ActionState, formData: FormDa
   }
 
   const diferenca = Math.round((valorBanco - saldoAtual) * 100) / 100;
+
+  const { error } = await supabase.from("ajustes_acruo").insert({
+    org_id: currentOrgId,
+    ativo_id: null,
+    conta_acruo_code: contaAcruoCode,
+    conta_receita_code: contaReceitaCode,
+    nome_grupo: nomeGrupo,
+    data_base: dataBase,
+    data_base_anterior: null,
+    valor_reportado_banco: valorBanco,
+    saldo_contabil_antes: saldoAtual,
+    acruo_calculado_interno: acruoCalculadoInterno,
+    diferenca,
+    fonte,
+    observacoes,
+    lancamento_id: null,
+  });
+  if (error) return { error: error.message };
+
+  revalidarTelasContabeis();
+
+  if (Math.abs(diferenca) < 0.01) {
+    return { aviso: "Apuração registrada. Valor do banco já bate com a contabilidade — nenhum lançamento será necessário." };
+  }
+  return { aviso: "Apuração registrada. Revise os números e clique em \"Lançar no Diário\" na tabela abaixo para confirmar." };
+}
+
+/**
+ * Gera o lançamento contábil de uma apuração já registrada, depois que o responsável revisou e
+ * aprovou os números (saldo contábil, cálculo interno e valor informado pelo banco). Recalcula o
+ * saldo contábil e a diferença na hora — como estavam na data-base da apuração — em vez de reusar
+ * os valores gravados no momento do registro, para o lançamento refletir a contabilidade mais
+ * atual (por exemplo, se outro lançamento retroativo à mesma data-base entrou nesse meio-tempo).
+ */
+export async function lancarAjusteAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
+  if (!canWrite(currentMembership.role)) {
+    return { error: "Seu papel (viewer) não permite lançar ajustes." };
+  }
+
+  const id = String(formData.get("id") || "").trim();
+  if (!id) return { error: "Apuração inválida." };
+
+  const { data: ajuste, error: fetchError } = await supabase
+    .from("ajustes_acruo")
+    .select("*")
+    .eq("org_id", currentOrgId)
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+  if (!ajuste) return { error: "Apuração não encontrada." };
+  if (ajuste.lancamento_id) return { error: "Essa apuração já tem um lançamento gerado." };
+
+  const saldos = await getSaldosPorContaAteData(supabase, currentOrgId, ajuste.data_base);
+  const saldoAtual = somarSaldo(saldos, ajuste.conta_acruo_code);
+  const diferenca = Math.round((Number(ajuste.valor_reportado_banco) - saldoAtual) * 100) / 100;
+
   let lancamentoId: string | null = null;
 
   if (Math.abs(diferenca) >= 0.01) {
-    const contaAcruoLancamento = primeiroCodigo(contaAcruoCode);
-    const contaReceitaLancamento = primeiroCodigo(contaReceitaCode);
+    const contaAcruoLancamento = primeiroCodigo(ajuste.conta_acruo_code);
+    const contaReceitaLancamento = primeiroCodigo(ajuste.conta_receita_code);
 
     const { data: maxNumero } = await supabase
       .from("lancamentos")
@@ -116,8 +183,8 @@ export async function registrarAjusteAction(_prev: ActionState, formData: FormDa
     const { data: lancId, error: lancError } = await supabase.rpc("create_lancamento", {
       p_org_id: currentOrgId,
       p_numero: numero,
-      p_data: dataBase,
-      p_historico: `Ajuste de acruamento — ${nomeGrupo} (${fonte || "extrato do banco/custodiante"})`,
+      p_data: ajuste.data_base,
+      p_historico: `Ajuste de acruamento — ${ajuste.nome_grupo} (${ajuste.fonte || "extrato do banco/custodiante"})`,
       p_linhas: linhas,
       p_intercompany_org_id: null,
     });
@@ -125,35 +192,23 @@ export async function registrarAjusteAction(_prev: ActionState, formData: FormDa
     lancamentoId = lancId as string;
   }
 
-  const { error } = await supabase.from("ajustes_acruo").insert({
-    org_id: currentOrgId,
-    ativo_id: null,
-    conta_acruo_code: contaAcruoCode,
-    conta_receita_code: contaReceitaCode,
-    nome_grupo: nomeGrupo,
-    data_base: dataBase,
-    data_base_anterior: null,
-    valor_reportado_banco: valorBanco,
-    saldo_contabil_antes: saldoAtual,
-    acruo_calculado_interno: acruoCalculadoInterno,
-    diferenca,
-    fonte,
-    observacoes,
-    lancamento_id: lancamentoId,
-  });
-  if (error) return { error: error.message };
+  const { error: updateError } = await supabase
+    .from("ajustes_acruo")
+    .update({
+      saldo_contabil_antes: saldoAtual,
+      diferenca,
+      lancamento_id: lancamentoId,
+    })
+    .eq("org_id", currentOrgId)
+    .eq("id", id);
+  if (updateError) return { error: updateError.message };
 
-  revalidatePath("/ajustes");
-  revalidatePath("/diario");
-  revalidatePath("/balancete");
-  revalidatePath("/razoes");
-  revalidatePath("/demonstracoes/dre");
-  revalidatePath("/consolidado");
+  revalidarTelasContabeis();
 
   if (Math.abs(diferenca) < 0.01) {
     return { aviso: "Valor do banco já bate com a contabilidade — nenhum lançamento foi necessário." };
   }
-  return null;
+  return { aviso: "Lançamento gerado com sucesso no Diário." };
 }
 
 export async function deleteAjusteAction(formData: FormData) {
