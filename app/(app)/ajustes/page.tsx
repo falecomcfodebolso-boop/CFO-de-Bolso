@@ -6,6 +6,9 @@ import { fmtMoney, fmtDate } from "@/lib/format";
 import { calcularAcruoInterno, CATEGORIA_ACRUO_LABEL, type AtivoAcruo } from "@/lib/accounting/acruo";
 import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
+import { NovaMarcacaoForm } from "./nova-marcacao-form";
+import { LancarMarcacaoButton } from "./lancar-marcacao-button";
+import { deleteMarcacaoAction } from "./marcacao-actions";
 import Link from "next/link";
 import { Upload } from "lucide-react";
 
@@ -26,7 +29,14 @@ export default async function AjustesPage({
   const podeEscrever = canWrite(currentMembership.role);
   const { data: dataParam } = await searchParams;
 
-  const [{ data: contasData }, { data: ativosData }, { data: ajustesData }, intervalo] = await Promise.all([
+  const [
+    { data: contasData },
+    { data: ativosData },
+    { data: ajustesData },
+    { data: ativosMercadoData },
+    { data: marcacoesData },
+    intervalo,
+  ] = await Promise.all([
     supabase.from("plano_de_contas").select("code, name").eq("org_id", currentOrgId).order("code"),
     supabase
       .from("ativos")
@@ -43,12 +53,26 @@ export default async function AjustesPage({
       .eq("org_id", currentOrgId)
       .order("data_base", { ascending: false })
       .order("created_at", { ascending: false }),
+    supabase
+      .from("ativos")
+      .select("id, nome, conta_code, conta_ganho_perda_mercado_code")
+      .eq("org_id", currentOrgId)
+      .eq("categoria_acruo", "mercado")
+      .order("nome"),
+    supabase
+      .from("ajustes_marcacao_mercado")
+      .select("*")
+      .eq("org_id", currentOrgId)
+      .order("data_base", { ascending: false })
+      .order("created_at", { ascending: false }),
     getIntervaloDeLancamentos(supabase, currentOrgId),
   ]);
 
   const contas = contasData ?? [];
   const ativos = (ativosData ?? []) as AtivoAcruo[];
   const ajustes = ajustesData ?? [];
+  const ativosMercado = ativosMercadoData ?? [];
+  const marcacoes = marcacoesData ?? [];
 
   const hoje = new Date().toISOString().slice(0, 10);
   const dataEscolhida = dataParam || hoje;
@@ -385,6 +409,129 @@ export default async function AjustesPage({
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="pt-4 border-t border-slate-200 space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Marcação a Mercado — Fundos de Renda Variável</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Fundos e posições sem cronograma de cupom (Pimco, Vanguard SP 500, Oaktree, CP Note GLD) não
+            geram juros acruado — o valor contábil é o próprio principal, marcado a mercado contra o
+            relatório/valuation statement do custodiante. Mesmo fluxo em dois passos: registrar a
+            apuração e só gerar o lançamento (contra a conta de ganho/perda dedicada de cada fundo)
+            depois de aprovar em &ldquo;Lançar no Diário&rdquo;.
+          </p>
+        </div>
+
+        {ativosMercado.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {ativosMercado.map((a) => {
+              const contabilAtual = Number(saldos.find((s) => s.conta_code === a.conta_code)?.saldo ?? 0);
+              const marcacoesAtivo = marcacoes.filter((m) => m.ativo_id === a.id);
+              const ultimaMarcacao =
+                marcacoesAtivo.find((m) => m.data_base === dataRef) ??
+                marcacoesAtivo.find((m) => m.data_base <= dataRef) ??
+                null;
+              const diferenca = ultimaMarcacao
+                ? Math.round((ultimaMarcacao.valor_reportado_mercado - contabilAtual) * 100) / 100
+                : null;
+              return (
+                <div key={a.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-sm font-medium text-slate-800 mb-2">{a.nome}</div>
+                  <div className="text-[11px] uppercase text-slate-400">Contábil atual</div>
+                  <div className="text-sm font-medium text-slate-700 mb-1.5">{fmtMoney(contabilAtual)}</div>
+                  <div className="text-[11px] uppercase text-slate-400">
+                    Informado
+                    {ultimaMarcacao && <> ({fmtDate(ultimaMarcacao.data_base)})</>}
+                  </div>
+                  <div className="text-sm font-medium text-slate-700 mb-1.5">
+                    {ultimaMarcacao ? fmtMoney(ultimaMarcacao.valor_reportado_mercado) : "—"}
+                  </div>
+                  <div className="text-[11px] uppercase text-slate-400">Diferença</div>
+                  <div
+                    className={`text-sm font-medium ${
+                      diferenca == null ? "text-slate-400" : Math.abs(diferenca) < 0.01 ? "text-emerald-700" : "text-amber-700"
+                    }`}
+                  >
+                    {diferenca != null ? fmtMoney(diferenca) : "—"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {podeEscrever && (
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-900 mb-3">Nova apuração de marcação a mercado</h3>
+            <NovaMarcacaoForm ativos={ativosMercado} dataBasePadrao={dataRef} />
+          </div>
+        )}
+
+        <div className="rounded-lg border border-slate-200 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+              <tr>
+                <th className="text-left px-3 py-2">Data-base</th>
+                <th className="text-left px-3 py-2">Fundo</th>
+                <th className="text-right px-3 py-2">Contábil (antes)</th>
+                <th className="text-right px-3 py-2">Mercado (relatório)</th>
+                <th className="text-right px-3 py-2">Diferença</th>
+                <th className="text-left px-3 py-2">Fonte</th>
+                <th className="text-right px-3 py-2">Status</th>
+                {podeEscrever && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {marcacoes.length === 0 && (
+                <tr>
+                  <td colSpan={podeEscrever ? 8 : 7} className="px-3 py-6 text-center text-slate-400">
+                    Nenhuma apuração de marcação a mercado registrada ainda.
+                  </td>
+                </tr>
+              )}
+              {marcacoes.map((m) => (
+                <tr key={m.id} className="border-t border-slate-100">
+                  <td className="px-3 py-2">{fmtDate(m.data_base)}</td>
+                  <td className="px-3 py-2">{m.nome_ativo}</td>
+                  <td className="px-3 py-2 text-right">{fmtMoney(m.saldo_contabil_antes)}</td>
+                  <td className="px-3 py-2 text-right">{fmtMoney(m.valor_reportado_mercado)}</td>
+                  <td className={`px-3 py-2 text-right font-medium ${m.diferenca >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {fmtMoney(m.diferenca)}
+                  </td>
+                  <td className="px-3 py-2 text-slate-500">{m.fonte || "—"}</td>
+                  <td className="px-3 py-2 text-right">
+                    {m.lancamento_id ? (
+                      <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                        Lançado
+                      </span>
+                    ) : Math.abs(m.diferenca) < 0.01 ? (
+                      <span className="text-xs font-medium text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+                        Sem diferença
+                      </span>
+                    ) : podeEscrever ? (
+                      <LancarMarcacaoButton id={m.id} />
+                    ) : (
+                      <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                        Pendente de lançamento
+                      </span>
+                    )}
+                  </td>
+                  {podeEscrever && (
+                    <td className="px-3 py-2 text-right">
+                      <form action={deleteMarcacaoAction}>
+                        <input type="hidden" name="id" value={m.id} />
+                        <button type="submit" className="text-xs text-red-600 hover:underline">
+                          excluir
+                        </button>
+                      </form>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
