@@ -6,6 +6,8 @@ import { fmtMoney, fmtDate } from "@/lib/format";
 import { calcularAcruoInterno, CATEGORIA_ACRUO_LABEL, type AtivoAcruo } from "@/lib/accounting/acruo";
 import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
+import Link from "next/link";
+import { Upload } from "lucide-react";
 
 /** Soma o saldo contábil de uma lista de contas separadas por vírgula (pools compartilhados). */
 function somarSaldo(saldos: { conta_code: string; saldo: number }[], codigos: string): number {
@@ -80,14 +82,25 @@ export default async function AjustesPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Ajustes de Acruamento</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Reconhecimento de receitas e despesas acruadas — compare o saldo já lançado na
-          contabilidade com o valor informado pelo extrato/valuation statement do banco ou
-          custodiante e, opcionalmente, com o cálculo interno papel a papel, gerando
-          automaticamente o lançamento de ajuste (variação do acruo) quando houver diferença.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Ajustes de Acruamento</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Reconhecimento de receitas e despesas acruadas — compare o saldo já lançado na
+            contabilidade com o valor informado pelo extrato/valuation statement do banco ou
+            custodiante e, opcionalmente, com o cálculo interno papel a papel. Depois de revisar e
+            aprovar, o lançamento de ajuste (variação do acruo) é gerado com um clique.
+          </p>
+        </div>
+        {podeEscrever && (
+          <Link
+            href="/ajustes/importar"
+            className="shrink-0 inline-flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-md px-3 py-2 hover:bg-slate-800"
+          >
+            <Upload className="h-4 w-4" />
+            Importar de PDF
+          </Link>
+        )}
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 space-y-2">
