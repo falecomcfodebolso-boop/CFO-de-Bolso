@@ -254,9 +254,128 @@ export async function parsePDF(buffer: ArrayBuffer): Promise<TransacaoExtraida[]
   const multiLinha = parsePDFCustodiaMultiLinha(texto);
   if (multiLinha.length > 0) return multiLinha;
 
+  // Ainda nada — tenta o formato de conta corrente do Bradesco Bank (Miami),
+  // com seções "DEPOSITS AND OTHER CREDITS" / "WITHDRAWALS AND OTHER DEBITS"
+  // e datas sem ano (ex: "8/03").
+  const contaCorrente = parsePDFContaCorrenteBradescoBank(texto);
+  if (contaCorrente.length > 0) return contaCorrente;
+
   throw new ParseError(
     "Consegui ler o texto do PDF, mas não reconheci nenhuma linha no formato \"data ... descrição ... valor\". O layout desse extrato pode ser diferente do esperado — tente OFX ou CSV, que são mais confiáveis."
   );
+}
+
+// ---------------------------------------------------------------------
+// PDF de conta corrente do Bradesco Bank (ex: "Banklink Checking Intl",
+// Miami) — outro layout bem diferente dos dois acima:
+//   - as datas de cada lançamento vêm sem ano (ex: "8/03", mês/dia); o ano
+//     é inferido a partir do período declarado no cabeçalho do extrato
+//     ("Statement Dates  8/03/26  thru  8/31/26");
+//   - a primeira linha de cada lançamento já traz data + descrição + valor
+//     juntos ("8/03 BAC FLORIDA BANK BROK.TRANS 1,687.50"); linhas
+//     seguintes (referência, código PPD etc.) são continuação da descrição,
+//     até a próxima data ou até o fim da seção;
+//   - o extrato é dividido em seções ("DEPOSITS AND OTHER CREDITS",
+//     "WITHDRAWALS AND OTHER DEBITS"/"OTHER DEBITS"/"CHECKS PAID") que
+//     definem o sinal do valor (entrada ou saída) — não há sinal explícito
+//     na própria linha.
+// ---------------------------------------------------------------------
+const CABECALHO_SECAO_CREDITO_CHECKING_REGEX = /DEPOSITS AND OTHER CREDITS/i;
+const CABECALHO_SECAO_DEBITO_CHECKING_REGEX = /(WITHDRAWALS AND OTHER DEBITS|OTHER DEBITS|CHECKS PAID)/i;
+const CABECALHO_SECAO_PARAR_CHECKING_REGEX =
+  /(DAILY BALANCE INFORMATION|OUTSTANDING CHECKS|RECONCILIATION OF ACCOUNT|IMPORTANT INFORMATION FOR BANK ACCOUNTS|CUSTOMERS? DUTY TO EXAMINE)/i;
+const CABECALHO_TABELA_CHECKING_REGEX = /^DATE\s+DESCRIPTION\s+AMOUNT/i;
+const LINHA_TRANSACAO_CHECKING_REGEX = /^(\d{1,2})\/(\d{1,2})\s+(.+?)\s+(-?[\d.,]*\d)\s*$/;
+
+type PeriodoExtrato = { mesInicio: number; anoInicio: number; mesFim: number; anoFim: number };
+
+function extrairPeriodoDeclarado(texto: string): PeriodoExtrato | null {
+  const m = texto.match(
+    /Statement Dates\s+(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+thru\s+(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i
+  );
+  if (!m) return null;
+  const normalizarAno = (y: string) => (y.length === 2 ? 2000 + Number(y) : Number(y));
+  return {
+    mesInicio: Number(m[1]),
+    anoInicio: normalizarAno(m[3]),
+    mesFim: Number(m[4]),
+    anoFim: normalizarAno(m[6]),
+  };
+}
+
+/** As datas de cada lançamento não trazem ano — resolve pelo mês, contra o
+ *  período declarado no cabeçalho (que pode cruzar dois meses/anos). */
+function resolverAnoTransacaoChecking(mes: number, periodo: PeriodoExtrato | null): number {
+  if (!periodo) return new Date().getUTCFullYear();
+  if (mes === periodo.mesFim) return periodo.anoFim;
+  if (mes === periodo.mesInicio) return periodo.anoInicio;
+  return periodo.anoFim;
+}
+
+function parsePDFContaCorrenteBradescoBank(texto: string): TransacaoExtraida[] {
+  const periodo = extrairPeriodoDeclarado(texto);
+  const linhas = texto
+    .split(/?
+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const transacoes: TransacaoExtraida[] = [];
+
+  let sinalSecaoAtual: 1 | -1 | null = null;
+  let dataAtual: string | null = null;
+  let descricaoAtual: string[] = [];
+  let valorAtual: number | null = null;
+
+  function fechaTransacaoPendente() {
+    if (dataAtual && valorAtual !== null && sinalSecaoAtual !== null) {
+      const descricao = descricaoAtual.join(" — ").slice(0, 300);
+      transacoes.push({
+        data: dataAtual,
+        descricao,
+        valor: sinalSecaoAtual === -1 ? -Math.abs(valorAtual) : Math.abs(valorAtual),
+      });
+    }
+    dataAtual = null;
+    descricaoAtual = [];
+    valorAtual = null;
+  }
+
+  for (const linha of linhas) {
+    if (CABECALHO_SECAO_PARAR_CHECKING_REGEX.test(linha)) {
+      fechaTransacaoPendente();
+      sinalSecaoAtual = null;
+      continue;
+    }
+    if (CABECALHO_SECAO_CREDITO_CHECKING_REGEX.test(linha)) {
+      fechaTransacaoPendente();
+      sinalSecaoAtual = 1;
+      continue;
+    }
+    if (CABECALHO_SECAO_DEBITO_CHECKING_REGEX.test(linha)) {
+      fechaTransacaoPendente();
+      sinalSecaoAtual = -1;
+      continue;
+    }
+    if (sinalSecaoAtual === null) continue; // fora de uma seção de transações reconhecida
+    if (CABECALHO_TABELA_CHECKING_REGEX.test(linha)) continue; // "DATE DESCRIPTION AMOUNT REFE"
+
+    const m = linha.match(LINHA_TRANSACAO_CHECKING_REGEX);
+    if (m) {
+      fechaTransacaoPendente(); // fecha a anterior antes de abrir uma nova
+      const mes = Number(m[1]);
+      const dia = Number(m[2]);
+      const ano = resolverAnoTransacaoChecking(mes, periodo);
+      dataAtual = `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+      descricaoAtual = [m[3].trim()];
+      valorAtual = parseValorFlexivel(m[4]);
+      continue;
+    }
+
+    if (dataAtual) descricaoAtual.push(linha);
+  }
+  fechaTransacaoPendente();
+
+  return transacoes;
 }
 
 // ---------------------------------------------------------------------
