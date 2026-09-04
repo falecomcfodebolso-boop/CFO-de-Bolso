@@ -16,8 +16,10 @@ export default async function ImportarApuracaoPage() {
         <h1 className="text-xl font-semibold text-slate-900 mt-1">Importar apurações de um PDF do banco</h1>
         <p className="text-sm text-slate-500 mt-1">
           Envie o &ldquo;Statement&rdquo; mensal do Itaú Private Bank. O sistema lê a seção de renda fixa,
-          casa cada papel com os Ativos já cadastrados (pelo ISIN) e soma os juros acruados por grupo —
-          você revisa os valores sugeridos e confirma antes de qualquer coisa ser gravada. O lançamento
+          casa cada papel com os Ativos já cadastrados (pelo ISIN) e soma os juros acruados por grupo — e,
+          separadamente, lê o valor de mercado dos fundos de renda variável (categoria &ldquo;mercado&rdquo;:
+          Pimco, Vanguard SP 500, Oaktree, CP Note GLD) para sugerir a marcação a mercado de cada um. Você
+          revisa os valores sugeridos de ambos e confirma antes de qualquer coisa ser gravada. O lançamento
           contábil continua exigindo aprovação separada (&ldquo;Lançar no Diário&rdquo;, na tela de
           Ajustes).
         </p>

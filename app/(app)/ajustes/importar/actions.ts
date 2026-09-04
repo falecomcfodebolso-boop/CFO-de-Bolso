@@ -6,6 +6,7 @@ import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { calcularAcruoInterno, type AtivoAcruo } from "@/lib/accounting/acruo";
 import {
   parseExtratoAcruoDePdf,
+  parseValoresMercadoDePdf,
   ParseAcruoError,
   type EntradaAcruoExtrato,
 } from "@/lib/accounting/parse-extrato-acruo";
@@ -22,11 +23,24 @@ export type PropostaApuracao = {
   itens: EntradaAcruoExtrato[];
 };
 
+export type PropostaMarcacao = {
+  ativoId: string;
+  nomeAtivo: string;
+  isin: string;
+  contaAtivoCode: string;
+  contaGanhoPerdaCode: string;
+  dataBase: string;
+  valorReportadoMercado: number;
+  saldoContabilAntes: number;
+  diferenca: number;
+};
+
 export type ParseAcruoState = {
   error?: string;
   dataBase?: string;
   propostas?: PropostaApuracao[];
   naoReconhecidas?: EntradaAcruoExtrato[];
+  propostasMercado?: PropostaMarcacao[];
 } | null;
 
 type AtivoComIsin = AtivoAcruo & { id: string; isin: string | null };
@@ -66,9 +80,9 @@ export async function parseExtratoAcruoPdfAction(
     return { error: "Por enquanto só é possível importar a partir de um arquivo PDF." };
   }
 
+  const buffer = await file.arrayBuffer();
   let parseado;
   try {
-    const buffer = await file.arrayBuffer();
     parseado = await parseExtratoAcruoDePdf(buffer);
   } catch (e) {
     if (e instanceof ParseAcruoError) return { error: e.message };
@@ -161,7 +175,46 @@ export async function parseExtratoAcruoPdfAction(
 
   propostas.sort((a, b) => a.nomeGrupo.localeCompare(b.nomeGrupo));
 
-  return { dataBase, propostas, naoReconhecidas };
+  // Fundos de renda variável (categoria 'mercado') — o mesmo Statement traz o valor de
+  // mercado deles em outras seções do PDF (Alternatives/Equities/High Yield sem cupom).
+  const { data: ativosMercadoData, error: ativosMercadoError } = await supabase
+    .from("ativos")
+    .select("id, nome, isin, conta_code, conta_ganho_perda_mercado_code")
+    .eq("org_id", currentOrgId)
+    .eq("categoria_acruo", "mercado");
+  if (ativosMercadoError) return { error: ativosMercadoError.message };
+
+  const ativosMercado = (ativosMercadoData ?? []).filter(
+    (a) => a.isin && a.conta_code && a.conta_ganho_perda_mercado_code
+  );
+
+  let propostasMercado: PropostaMarcacao[] = [];
+  if (ativosMercado.length > 0) {
+    const isins = ativosMercado.map((a) => a.isin as string);
+    const valoresMercado = await parseValoresMercadoDePdf(buffer, isins);
+
+    propostasMercado = ativosMercado
+      .map((a) => {
+        const entrada = valoresMercado.entradas.find((e) => e.isin === a.isin);
+        if (!entrada) return null;
+        const saldoContabilAntes = Number(saldos.find((s) => s.conta_code === a.conta_code)?.saldo ?? 0);
+        const diferenca = Math.round((entrada.valorMercado - saldoContabilAntes) * 100) / 100;
+        return {
+          ativoId: a.id,
+          nomeAtivo: a.nome,
+          isin: a.isin as string,
+          contaAtivoCode: a.conta_code as string,
+          contaGanhoPerdaCode: a.conta_ganho_perda_mercado_code as string,
+          dataBase,
+          valorReportadoMercado: entrada.valorMercado,
+          saldoContabilAntes,
+          diferenca,
+        };
+      })
+      .filter((p): p is PropostaMarcacao => p != null);
+  }
+
+  return { dataBase, propostas, naoReconhecidas, propostasMercado };
 }
 
 export async function confirmarApuracoesAction(
@@ -186,6 +239,39 @@ export async function confirmarApuracoesAction(
       valor_reportado_banco: p.valorReportadoBanco,
       saldo_contabil_antes: p.saldoContabilAntes,
       acruo_calculado_interno: p.acruoCalculadoInterno,
+      diferenca: p.diferenca,
+      fonte,
+      observacoes: "Sugerido automaticamente a partir da importação de PDF — revisar e lançar.",
+      lancamento_id: null,
+    })),
+    { count: "exact" }
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath("/ajustes");
+  return { registradas: count ?? propostas.length };
+}
+
+export async function confirmarMarcacoesAction(
+  propostas: PropostaMarcacao[],
+  fonte: string
+): Promise<{ error?: string; registradas?: number }> {
+  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
+  if (!canWrite(currentMembership.role)) {
+    return { error: "Seu papel (viewer) não permite registrar apurações." };
+  }
+  if (propostas.length === 0) return { error: "Selecione ao menos um fundo para registrar." };
+
+  const { error, count } = await supabase.from("ajustes_marcacao_mercado").insert(
+    propostas.map((p) => ({
+      org_id: currentOrgId,
+      ativo_id: p.ativoId,
+      conta_ativo_code: p.contaAtivoCode,
+      conta_ganho_perda_code: p.contaGanhoPerdaCode,
+      nome_ativo: p.nomeAtivo,
+      data_base: p.dataBase,
+      valor_reportado_mercado: p.valorReportadoMercado,
+      saldo_contabil_antes: p.saldoContabilAntes,
       diferenca: p.diferenca,
       fonte,
       observacoes: "Sugerido automaticamente a partir da importação de PDF — revisar e lançar.",
