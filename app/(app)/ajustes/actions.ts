@@ -2,7 +2,7 @@
 
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { revalidatePath } from "next/cache";
-import { getSaldosPorConta } from "@/lib/accounting/queries";
+import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { calcularAcruoInterno, type AtivoAcruo } from "@/lib/accounting/acruo";
 
 export type ActionState = { error?: string; aviso?: string } | null;
@@ -51,7 +51,9 @@ export async function registrarAjusteAction(_prev: ActionState, formData: FormDa
   const valorBanco = parseFloat(valorBancoRaw.replace(",", "."));
   if (Number.isNaN(valorBanco)) return { error: "Valor informado pelo banco inválido." };
 
-  const saldos = await getSaldosPorConta(supabase, currentOrgId);
+  // Saldo "como estava" na própria data-base do fechamento sendo registrado — não o
+  // saldo ao vivo de hoje, que já pode incluir lançamentos de meses seguintes.
+  const saldos = await getSaldosPorContaAteData(supabase, currentOrgId, dataBase);
   const saldoAtual = somarSaldo(saldos, contaAcruoCode);
 
   // Cálculo interno papel a papel: soma o acruo calculado de todos os Ativos cadastrados

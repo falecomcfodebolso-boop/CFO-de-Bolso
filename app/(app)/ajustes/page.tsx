@@ -3,7 +3,7 @@ import { deleteAjusteAction } from "./actions";
 import { NovoAjusteForm } from "./novo-ajuste-form";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { calcularAcruoInterno, CATEGORIA_ACRUO_LABEL, type AtivoAcruo } from "@/lib/accounting/acruo";
-import { getSaldosPorConta } from "@/lib/accounting/queries";
+import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
 
 /** Soma o saldo contábil de uma lista de contas separadas por vírgula (pools compartilhados). */
@@ -23,7 +23,7 @@ export default async function AjustesPage({
   const podeEscrever = canWrite(currentMembership.role);
   const { data: dataParam } = await searchParams;
 
-  const [{ data: contasData }, { data: ativosData }, { data: ajustesData }, saldos, intervalo] = await Promise.all([
+  const [{ data: contasData }, { data: ativosData }, { data: ajustesData }, intervalo] = await Promise.all([
     supabase.from("plano_de_contas").select("code, name").eq("org_id", currentOrgId).order("code"),
     supabase
       .from("ativos")
@@ -40,7 +40,6 @@ export default async function AjustesPage({
       .eq("org_id", currentOrgId)
       .order("data_base", { ascending: false })
       .order("created_at", { ascending: false }),
-    getSaldosPorConta(supabase, currentOrgId),
     getIntervaloDeLancamentos(supabase, currentOrgId),
   ]);
 
@@ -51,6 +50,11 @@ export default async function AjustesPage({
   const hoje = new Date().toISOString().slice(0, 10);
   const dataEscolhida = dataParam || hoje;
   const { data: dataRef, ajustada: dataAjustada, dataOriginal } = resolverDataReferencia(dataEscolhida, intervalo);
+  // "Contábil atual" precisa refletir o saldo tal como estava na data-base do fechamento
+  // sendo comparado (ex.: 31/08), não o saldo "ao vivo" de hoje — senão, ao consultar um
+  // mês fechado depois de já termos lançamentos de meses seguintes, o valor mostrado deixa
+  // de ser o que estava contabilizado naquele fechamento.
+  const saldos = await getSaldosPorContaAteData(supabase, currentOrgId, dataRef);
 
   // Agrupa os ativos cadastrados por grupo de acruo, calculando o cálculo interno papel a
   // papel de cada um na data de referência selecionada (padrão: hoje) e o subtotal do grupo.
