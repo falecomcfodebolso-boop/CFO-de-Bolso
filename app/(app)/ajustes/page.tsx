@@ -94,16 +94,19 @@ export default async function AjustesPage({
         <p className="font-medium text-slate-700">Política de reconhecimento adotada</p>
         <p>
           O valor reportado pelo banco/custodiante na data-base é a fonte oficial do acruo — é ele
-          que é registrado na contabilidade (não o cálculo interno). O lançamento gerado reflete a
-          <strong> variação</strong> do acruo no período (diferença entre o saldo contábil atual da
-          conta de acruo e o valor informado pelo extrato).
+          que é registrado na contabilidade (não o cálculo interno). Registrar uma apuração só grava
+          os números para revisão; o lançamento reflete a <strong>variação</strong> do acruo no
+          período (diferença entre o saldo contábil na própria data-base e o valor informado pelo
+          extrato) e só é gerado quando o responsável revisa e aprova, clicando em
+          &ldquo;Lançar no Diário&rdquo; na tabela de histórico abaixo.
         </p>
         <p>
           O cálculo interno (30/360) é calculado papel a papel a partir do cadastro de cada Ativo e
           somado por grupo, apenas para comparação/justificativa da política. Papéis com cronograma
           de cupom periódico acruam desde o último pagamento; CLNs sem cronograma (acruo contínuo)
           acruam desde a data de início da aplicação. Em ambos os casos o valor é só uma referência —
-          quem é lançado na contabilidade é sempre o valor informado pelo extrato do banco/custodiante.
+          quem é lançado na contabilidade, depois da aprovação, é sempre o valor informado pelo
+          extrato do banco/custodiante.
         </p>
       </div>
 
