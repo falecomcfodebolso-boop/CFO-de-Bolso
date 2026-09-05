@@ -146,7 +146,12 @@ export function UploadForm({
   }
 
   const jaSubmeteu =
-    !!state && (state.loteId || state.propostasAtivos || state.propostasAcruo || state.propostasMercado);
+    !!state &&
+    (state.loteId ||
+      state.propostasAtivos ||
+      state.ativosJaCadastrados ||
+      state.propostasAcruo ||
+      state.propostasMercado);
 
   if (!jaSubmeteu) {
     return (
@@ -235,6 +240,14 @@ export function UploadForm({
             onChange={(e) => setFonte(e.target.value)}
             className="w-full max-w-md rounded-md border border-slate-300 px-3 py-1.5 text-sm"
           />
+        </div>
+      )}
+
+      {state?.ativosJaCadastrados && state.ativosJaCadastrados.length > 0 && (
+        <div className="text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-md px-3 py-2">
+          {state.ativosJaCadastrados.length}{" "}
+          {state.ativosJaCadastrados.length === 1 ? "título já cadastrado foi ignorado" : "títulos já cadastrados foram ignorados"}{" "}
+          automaticamente (não entram como &ldquo;novo&rdquo; de novo): {state.ativosJaCadastrados.join("; ")}.
         </div>
       )}
 

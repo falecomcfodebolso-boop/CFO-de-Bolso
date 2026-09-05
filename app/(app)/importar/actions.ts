@@ -38,10 +38,78 @@ export type UploadUnificadoState = {
   dataBase?: string;
   formato?: "itau" | "pershing";
   propostasAtivos?: AtivoProposto[];
+  ativosJaCadastrados?: string[];
   propostasAcruo?: PropostaApuracao[];
   naoReconhecidas?: EntradaAcruoExtrato[];
   propostasMercado?: PropostaMarcacao[];
 } | null;
+
+/**
+ * Remove nomes de acentuação e pontuação e normaliza espaços — usado pra
+ * comparar o nome de um título lido do PDF com o nome (curto, apelidado)
+ * do Ativo já cadastrado (ex.: "Bank Amer (XP/Bradesco)" vs "BANK OF
+ * AMERICA CORP 4.4% ...").
+ */
+function normalizarNomeTitulo(s: string): string {
+  return s
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9& ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const PALAVRAS_GENERICAS_DEMAIS = new Set(["CORP", "BANK", "CO", "INC", "SA", "THE", "AND"]);
+
+/**
+ * Compara o nome de um Ativo já cadastrado (geralmente um apelido curto,
+ * às vezes com sufixo "(Grupo)") com o nome completo de um título lido do
+ * PDF de custódia — best-effort: se algum "token" característico do nome
+ * do Ativo (emissor, ex: "AMER", "GOLDMAN", "ITAU") aparece dentro do nome
+ * do título do PDF (ou vice-versa), considera que é o mesmo papel.
+ */
+function nomesProvavelmenteMesmoTitulo(nomeAtivo: string, nomeProposta: string): boolean {
+  const base = normalizarNomeTitulo(nomeAtivo.replace(/\([^)]*\)\s*$/, ""));
+  const alvo = normalizarNomeTitulo(nomeProposta);
+  if (!base || !alvo) return false;
+  const tokens = base.split(" ").filter((t) => t.length >= 4 && !PALAVRAS_GENERICAS_DEMAIS.has(t));
+  if (tokens.length === 0) return false;
+  return tokens.some((t) => alvo.includes(t) || t.includes(alvo));
+}
+
+/**
+ * Filtra da lista de propostas de novos ativos (lidas da seção "Portfolio
+ * Holdings" do PDF) qualquer título que já bate com um Ativo existente na
+ * organização — por ISIN/CUSIP (quando cadastrado) ou, na falta dele
+ * (como é o caso do grupo "XP/Bradesco" hoje), por nome. Sem esse filtro,
+ * um PDF de custódia cujos títulos já foram cadastrados manualmente (ou
+ * por uma importação anterior) apareceria de novo inteiro em "Novas
+ * posições para a Carteira", arriscando criar Ativos duplicados.
+ */
+function filtrarPropostasJaCadastradas(
+  propostas: AtivoProposto[],
+  ativosExistentes: { nome: string; isin: string | null }[]
+): { novas: AtivoProposto[]; jaCadastrados: string[] } {
+  const novas: AtivoProposto[] = [];
+  const jaCadastrados: string[] = [];
+  for (const p of propostas) {
+    const bate = ativosExistentes.some((a) => {
+      const isins = (a.isin ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (isins.includes(p.identificador)) return true;
+      return nomesProvavelmenteMesmoTitulo(a.nome, p.nome);
+    });
+    if (bate) {
+      jaCadastrados.push(p.nome);
+    } else {
+      novas.push(p);
+    }
+  }
+  return { novas, jaCadastrados };
+}
 
 export async function uploadImportUnificadoAction(
   _prev: UploadUnificadoState,
@@ -88,9 +156,17 @@ export async function uploadImportUnificadoAction(
   let dataBase: string | undefined;
   let formato: "itau" | "pershing" | undefined;
 
+  let ativosJaCadastrados: string[] = [];
   if (tipo === "pdf") {
     try {
-      propostasAtivos = await parseHoldingsDePdf(buffer);
+      const propostasLidas = await parseHoldingsDePdf(buffer);
+      const { data: ativosExistentes } = await supabase
+        .from("ativos")
+        .select("nome, isin")
+        .eq("org_id", currentOrgId);
+      const filtradas = filtrarPropostasJaCadastradas(propostasLidas, ativosExistentes ?? []);
+      propostasAtivos = filtradas.novas;
+      ativosJaCadastrados = filtradas.jaCadastrados;
     } catch {
       // Sem seção "Portfolio Holdings" nesse PDF — não é obrigatória aqui.
     }
@@ -108,7 +184,10 @@ export async function uploadImportUnificadoAction(
   }
 
   const temOutrasPropostas =
-    propostasAtivos.length > 0 || propostasAcruo.length > 0 || propostasMercado.length > 0;
+    propostasAtivos.length > 0 ||
+    ativosJaCadastrados.length > 0 ||
+    propostasAcruo.length > 0 ||
+    propostasMercado.length > 0;
 
   if (transacoes.length === 0 && !temOutrasPropostas) {
     if (erroTransacoes) return { error: erroTransacoes };
@@ -181,7 +260,8 @@ export async function uploadImportUnificadoAction(
 
   // Caso comum (extrato de conta corrente simples, sem posições/acruamento
   // no mesmo PDF): mantém o fluxo de sempre, direto pra tela de conciliação.
-  if (loteId && !temOutrasPropostas) {
+  const temPropostasAcionaveis = propostasAtivos.length > 0 || propostasAcruo.length > 0 || propostasMercado.length > 0;
+  if (loteId && !temPropostasAcionaveis && ativosJaCadastrados.length === 0) {
     redirect(`/importar/${loteId}`);
   }
 
@@ -191,6 +271,7 @@ export async function uploadImportUnificadoAction(
     dataBase,
     formato,
     propostasAtivos: propostasAtivos.length > 0 ? propostasAtivos : undefined,
+    ativosJaCadastrados: ativosJaCadastrados.length > 0 ? ativosJaCadastrados : undefined,
     propostasAcruo: propostasAcruo.length > 0 ? propostasAcruo : undefined,
     naoReconhecidas: naoReconhecidas.length > 0 ? naoReconhecidas : undefined,
     propostasMercado: propostasMercado.length > 0 ? propostasMercado : undefined,
