@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ExcluirLoteButton } from "./excluir-lote-button";
 
 export default async function ImportarPage() {
-  const { supabase, currentOrgId } = await requireOrgContext();
+  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
+  const moeda = currentMembership.organizations?.base_currency ?? "USD";
 
   const { data: contas } = await supabase
     .from("plano_de_contas")
@@ -38,15 +39,19 @@ export default async function ImportarPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Importar extrato</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Importar</h1>
         <p className="text-sm text-slate-500 mt-1">
           Suba um extrato bancário (OFX, CSV, XLS/XLSX ou PDF) para gerar sugestões de lançamento
-          automaticamente. Você revisa e confirma cada transação antes de virar lançamento de verdade no
-          Diário — nada é lançado sem sua confirmação.
+          automaticamente — você revisa e confirma cada transação antes de virar lançamento de verdade no
+          Diário, nada é lançado sem sua confirmação. Se o arquivo for o Statement completo de uma conta
+          de custódia (Itaú Private Bank ou Bradesco Bank/Pershing), essa mesma tela já lê tudo o que
+          existir nele — movimentação de caixa, posições da Carteira, juros acruados e marcação a
+          mercado — e mostra cada seção pra você revisar e confirmar, sem precisar subir o mesmo arquivo
+          de novo em Carteira → Importar ou Ajustes → Importar.
         </p>
       </div>
 
-      <UploadForm contasBancarias={contas ?? []} />
+      <UploadForm contasBancarias={contas ?? []} moeda={moeda} />
 
       <div>
         <h2 className="text-sm font-semibold text-slate-700 mb-2">Importações recentes</h2>
