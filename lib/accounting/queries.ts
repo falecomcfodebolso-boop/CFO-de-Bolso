@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { arredondarCentavos } from "@/lib/format";
 
 export type SaldoConta = {
   org_id: string;
@@ -55,7 +56,7 @@ export async function getSaldosPorContaAteData(
       natureza: m.natureza,
       saldo: 0,
     };
-    atual.saldo += Number(m.valor_saldo);
+    atual.saldo = arredondarCentavos(atual.saldo + Number(m.valor_saldo));
     porConta.set(m.conta_code, atual);
   }
   return Array.from(porConta.values()).sort((a, b) => a.conta_code.localeCompare(b.conta_code));
@@ -78,7 +79,7 @@ export async function getMovimentoConta(
 }
 
 export function totalPorNatureza(saldos: SaldoConta[], natureza: SaldoConta["natureza"]) {
-  return saldos
-    .filter((s) => s.natureza === natureza)
-    .reduce((acc, s) => acc + Number(s.saldo), 0);
+  return arredondarCentavos(
+    saldos.filter((s) => s.natureza === natureza).reduce((acc, s) => acc + Number(s.saldo), 0)
+  );
 }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GrupoDfc, GrupoDre, Natureza } from "./classificacao";
+import { arredondarCentavos } from "@/lib/format";
 
 export type MovimentoClassificado = {
   lancamento_linha_id: string;
@@ -148,7 +149,7 @@ export async function getBalanco(supabase: SupabaseClient, orgId: string, data: 
       circulante: m.circulante,
       saldo: 0,
     };
-    atual.saldo += Number(m.valor_saldo);
+    atual.saldo = arredondarCentavos(atual.saldo + Number(m.valor_saldo));
     porConta.set(m.conta_code, atual);
   }
 
@@ -311,7 +312,7 @@ export async function getDMPL(supabase: SupabaseClient, orgId: string, inicio: s
   for (const m of movsAteInicio) {
     if (m.natureza !== "PL") continue;
     const atual = saldoInicialPorConta.get(m.conta_code) ?? { name: m.conta_name, saldo: 0 };
-    atual.saldo += Number(m.valor_saldo);
+    atual.saldo = arredondarCentavos(atual.saldo + Number(m.valor_saldo));
     saldoInicialPorConta.set(m.conta_code, atual);
   }
 
@@ -319,7 +320,7 @@ export async function getDMPL(supabase: SupabaseClient, orgId: string, inicio: s
   for (const m of movsPeriodo) {
     if (m.natureza !== "PL") continue;
     const atual = movimentoPorConta.get(m.conta_code) ?? { name: m.conta_name, movimento: 0 };
-    atual.movimento += Number(m.valor_saldo);
+    atual.movimento = arredondarCentavos(atual.movimento + Number(m.valor_saldo));
     movimentoPorConta.set(m.conta_code, atual);
   }
 
