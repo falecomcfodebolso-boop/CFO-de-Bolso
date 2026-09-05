@@ -227,10 +227,13 @@ export default async function AjustesPage({
                     <div className="text-sm font-medium text-slate-700">{fmtMoney(saldoContabilAtual)}</div>
                   </div>
                   <div>
-                    <div className="text-[11px] uppercase text-slate-400">
-                      Calculado (interno, 30/360){temPendentes ? " — confirmados" : ""}
-                    </div>
-                    <div className="text-sm font-medium text-slate-700">{fmtMoney(baseCalculoParaComparar)}</div>
+                    <div className="text-[11px] uppercase text-slate-400">Calculado (interno, 30/360)</div>
+                    <div className="text-sm font-medium text-slate-700">{fmtMoney(subtotal)}</div>
+                    {temPendentes && (
+                      <div className="text-[11px] text-slate-400">
+                        {fmtMoney(subtotalConfirmado)} confirmados + {fmtMoney(subtotalPendente)} pending
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="text-[11px] uppercase text-slate-400">
