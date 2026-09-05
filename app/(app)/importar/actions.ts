@@ -11,6 +11,7 @@ import {
   type TipoArquivoImportacao,
 } from "@/lib/import/parsers";
 import { sugerirClassificacoes } from "@/lib/import/classify";
+import { sugerirClassificacaoCupomAcruo } from "@/lib/accounting/detectar-cupom-acruo";
 import { parseHoldingsDePdf, type AtivoProposto } from "@/lib/portfolio/parse-holdings";
 import {
   montarPropostasAcruoEMercado,
@@ -237,7 +238,14 @@ export async function uploadImportUnificadoAction(
     if (insertError) return { error: insertError.message };
 
     try {
-      const sugestoes = await sugerirClassificacoes(transacoes, contas ?? []);
+      // Regra determinística primeiro (recebimento de cupom de um Ativo com
+      // acruamento reconhecido por ISIN/CUSIP na descrição) — evita que a IA
+      // sugira por engano a conta do próprio ativo em vez da conta de juros
+      // acruados a receber (ver lib/accounting/detectar-cupom-acruo.ts).
+      // Só cai na IA pro que essa regra não reconhecer.
+      const sugestoesCupom = await sugerirClassificacaoCupomAcruo(transacoes, supabase, currentOrgId);
+      const sugestoesIA = await sugerirClassificacoes(transacoes, contas ?? []);
+      const sugestoes = transacoes.map((_, i) => sugestoesCupom.get(i) ?? sugestoesIA[i]);
       const atualizacoes = inseridas
         .map((row, i) => ({ id: row.id, sugestao: sugestoes[i] }))
         .filter((u) => u.sugestao?.conta_code);
