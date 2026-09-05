@@ -266,6 +266,7 @@ export default async function AjustesPage({
                       <th className="text-left px-3 py-2">Categoria</th>
                       <th className="text-right px-3 py-2">Valor Face</th>
                       <th className="text-right px-3 py-2">Taxa</th>
+                      <th className="text-right px-3 py-2">Último Pagamento</th>
                       <th className="text-right px-3 py-2">Dias</th>
                       <th className="text-right px-3 py-2">Cálculo Interno</th>
                       <th className="text-left px-3 py-2">Obs.</th>
@@ -290,6 +291,17 @@ export default async function AjustesPage({
                               <span className="text-xs text-slate-400"> ({i.indice_referencia})</span>
                             )}
                           </td>
+                          <td className="px-3 py-2 text-right text-slate-500">
+                            {i.categoria_acruo === "periodico"
+                              ? i.data_pagamento_anterior
+                                ? fmtDate(i.data_pagamento_anterior)
+                                : "—"
+                              : i.categoria_acruo === "continuo"
+                                ? i.data_inicio_acruo
+                                  ? fmtDate(i.data_inicio_acruo)
+                                  : "—"
+                                : "—"}
+                          </td>
                           <td className="px-3 py-2 text-right">{i.dias ?? "—"}</td>
                           <td className="px-3 py-2 text-right font-medium">
                             {i.valorCalc != null ? fmtMoney(i.valorCalc) : "— (usa extrato)"}
@@ -303,14 +315,14 @@ export default async function AjustesPage({
                     {temPendentes && (
                       <>
                         <tr className="border-t border-slate-200 bg-slate-50 text-slate-600">
-                          <td className="px-3 py-2" colSpan={5}>
+                          <td className="px-3 py-2" colSpan={6}>
                             Subtotal — confirmados pelo custodiante
                           </td>
                           <td className="px-3 py-2 text-right">{fmtMoney(subtotalConfirmado)}</td>
                           <td></td>
                         </tr>
                         <tr className="bg-amber-50 text-amber-700">
-                          <td className="px-3 py-2" colSpan={5}>
+                          <td className="px-3 py-2" colSpan={6}>
                             Subtotal — pending receipt (sem valor do custodiante)
                           </td>
                           <td className="px-3 py-2 text-right">{fmtMoney(subtotalPendente)}</td>
@@ -319,7 +331,7 @@ export default async function AjustesPage({
                       </>
                     )}
                     <tr className="border-t border-slate-200 bg-slate-50 font-semibold">
-                      <td className="px-3 py-2" colSpan={5}>
+                      <td className="px-3 py-2" colSpan={6}>
                         Subtotal {nomeGrupo}
                       </td>
                       <td className="px-3 py-2 text-right">{fmtMoney(subtotal)}</td>
