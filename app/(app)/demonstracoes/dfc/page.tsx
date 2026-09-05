@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDFC } from "@/lib/accounting/demonstrativos";
 import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
-import { fmtDate } from "@/lib/format";
+import { fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
 
@@ -107,8 +107,8 @@ export default async function DfcPage({
         currency={currency}
         comparar={comparar}
         labelBaseAV="a soma dos três grupos de atividades (em módulo)"
-        labelAtual={`${fmtDate(inicio)} – ${fmtDate(fim)}`}
-        labelAnterior={`${fmtDate(inicioAnt)} – ${fmtDate(fimAnt)}`}
+        labelAtual={`${fmtDateNumerica(inicio)} – ${fmtDateNumerica(fim)}`}
+        labelAnterior={`${fmtDateNumerica(inicioAnt)} – ${fmtDateNumerica(fimAnt)}`}
       />
 
       <p className="text-xs text-slate-400">

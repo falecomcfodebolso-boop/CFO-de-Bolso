@@ -2,7 +2,7 @@ import { requireOrgContext } from "@/lib/org";
 import { getSaldosPorContaAteData, totalPorNatureza, type SaldoConta } from "@/lib/accounting/queries";
 import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
 import { dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
-import { fmtMoney, fmtDate } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../demonstracoes/export-buttons";
 import { TabelaComparativa } from "../demonstracoes/tabela-comparativa";
 
@@ -165,8 +165,8 @@ export default async function BalancetePage({
               currency={currency}
               comparar={comparar}
               labelBaseAV={`o total de ${g.label}`}
-              labelAtual={fmtDate(data)}
-              labelAnterior={fmtDate(dataAnt)}
+              labelAtual={fmtDateNumerica(data)}
+              labelAnterior={fmtDateNumerica(dataAnt)}
             />
           </div>
         );

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDMPL } from "@/lib/accounting/demonstrativos";
 import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
-import { fmtDate } from "@/lib/format";
+import { fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
 
@@ -104,8 +104,8 @@ export default async function DmplPage({
         currency={currency}
         comparar={comparar}
         labelBaseAV="o Saldo Final do PL"
-        labelAtual={`${fmtDate(inicio)} – ${fmtDate(fim)}`}
-        labelAnterior={`${fmtDate(inicioAnt)} – ${fmtDate(fimAnt)}`}
+        labelAtual={`${fmtDateNumerica(inicio)} – ${fmtDateNumerica(fim)}`}
+        labelAnterior={`${fmtDateNumerica(inicioAnt)} – ${fmtDateNumerica(fimAnt)}`}
       />
 
       <div>
@@ -120,8 +120,8 @@ export default async function DmplPage({
             currency={currency}
             comparar={comparar}
             labelBaseAV="o Saldo Final do PL"
-            labelAtual={`${fmtDate(inicio)} – ${fmtDate(fim)}`}
-            labelAnterior={`${fmtDate(inicioAnt)} – ${fmtDate(fimAnt)}`}
+            labelAtual={`${fmtDateNumerica(inicio)} – ${fmtDateNumerica(fim)}`}
+            labelAnterior={`${fmtDateNumerica(inicioAnt)} – ${fmtDateNumerica(fimAnt)}`}
           />
         )}
       </div>

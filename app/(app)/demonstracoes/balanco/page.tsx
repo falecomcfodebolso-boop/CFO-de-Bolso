@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getBalanco, type ContaSaldo } from "@/lib/accounting/demonstrativos";
 import { dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
-import { fmtMoney, fmtDate } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
 import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
@@ -168,8 +168,8 @@ export default async function BalancoPage({
           currency={currency}
           comparar={comparar}
           labelBaseAV="o Ativo Total"
-          labelAtual={fmtDate(data)}
-          labelAnterior={fmtDate(dataAnt)}
+          labelAtual={fmtDateNumerica(data)}
+          labelAnterior={fmtDateNumerica(dataAnt)}
         />
       </div>
 
@@ -182,8 +182,8 @@ export default async function BalancoPage({
           currency={currency}
           comparar={comparar}
           labelBaseAV="o Ativo Total"
-          labelAtual={fmtDate(data)}
-          labelAnterior={fmtDate(dataAnt)}
+          labelAtual={fmtDateNumerica(data)}
+          labelAnterior={fmtDateNumerica(dataAnt)}
         />
       </div>
 
