@@ -30,9 +30,26 @@ function linha(
 ) {
   const x = doc.x + (opts.indent ?? 0) * 14;
   const width = 495 - (opts.indent ?? 0) * 14;
-  doc.font(opts.bold ? "Helvetica-Bold" : "Helvetica").fontSize(10);
+  const labelWidth = width - 110;
+  const fonte = opts.bold ? "Helvetica-Bold" : "Helvetica";
+  doc.font(fonte).fontSize(10);
+
+  // Mede a altura real do rotulo (que pode quebrar em mais de uma linha
+  // quando o nome da conta e longo) ANTES de desenhar, para saber quanto
+  // espaco a linha inteira vai ocupar.
+  const alturaLabel = doc.heightOfString(label, { width: labelWidth });
+  const alturaValor = valor !== null ? doc.heightOfString(fmtMoney(valor, currency), { width: 495 }) : 0;
+  const alturaLinha = Math.max(alturaLabel, alturaValor, doc.currentLineHeight());
+
+  // Se a linha nao couber no espaco que resta na pagina, quebra a pagina
+  // ANTES de desenhar — evita que o rotulo comece numa pagina e o valor
+  // (ou o resto do rotulo) va parar na proxima.
+  if (doc.y + alturaLinha > doc.page.height - doc.page.margins.bottom) {
+    doc.addPage();
+  }
+
   const y = doc.y;
-  doc.text(label, x, y, { width: width - 110, continued: false });
+  doc.font(fonte).fontSize(10).text(label, x, y, { width: labelWidth, continued: false });
   if (valor !== null) {
     const cor = valor < 0 ? "#dc2626" : "#0f172a";
     doc.fillColor(cor).text(fmtMoney(valor, currency), doc.page.margins.left, y, {
@@ -41,6 +58,9 @@ function linha(
     });
     doc.fillColor("#000000");
   }
+  // Avanca o cursor pela altura REAL da linha (a maior entre rotulo e
+  // valor), nao por um valor fixo — e essa a correcao do bug.
+  doc.y = y + alturaLinha;
   doc.moveDown(0.35);
 }
 
@@ -199,18 +219,57 @@ function fmtPctPdf(v: number | null): string {
 
 type Coluna = { texto: string; largura: number; align?: "left" | "right"; bold?: boolean; cor?: string };
 
-function linhaColunas(doc: PDFKit.PDFDocument, colunas: Coluna[], opts: { bold?: boolean } = {}) {
+function linhaColunas(
+  doc: PDFKit.PDFDocument,
+  colunas: Coluna[],
+  opts: { bold?: boolean; headerParaRepetir?: Coluna[] } = {}
+) {
+  const fonteDe = (col: Coluna) => (col.bold || opts.bold ? "Helvetica-Bold" : "Helvetica");
+
+  // 1) Mede a altura real de CADA coluna (uma "Conta" longa pode quebrar
+  //    em 2+ linhas) antes de desenhar qualquer coisa, para descobrir a
+  //    altura da linha inteira (a maior entre as colunas). Sem isso, o
+  //    cursor so avancava o suficiente para a ultima coluna desenhada —
+  //    normalmente um numero curto de uma linha so — e a proxima linha
+  //    da tabela acabava desenhada por cima do fim de uma "Conta" longa.
+  doc.fontSize(9);
+  let alturaLinha = doc.currentLineHeight();
+  for (const col of colunas) {
+    doc.font(fonteDe(col));
+    const altura = doc.heightOfString(col.texto, { width: col.largura });
+    if (altura > alturaLinha) alturaLinha = altura;
+  }
+
+  // 2) Se a linha nao couber no espaco que resta na pagina, quebra a
+  //    pagina ANTES de desenhar qualquer coluna — evita que colunas de
+  //    uma mesma linha acabem espalhadas em paginas diferentes — e
+  //    repete o cabecalho da tabela no topo da nova pagina, quando
+  //    fornecido, para nao perder o significado de cada coluna.
+  if (doc.y + alturaLinha > doc.page.height - doc.page.margins.bottom) {
+    doc.addPage();
+    if (opts.headerParaRepetir) {
+      linhaColunas(doc, opts.headerParaRepetir, { bold: true });
+      doc.moveDown(0.1);
+    }
+  }
+
+  // 3) Desenha todas as colunas na MESMA posicao y — cada coluna e
+  //    posicionada explicitamente, nunca dependendo de onde a coluna
+  //    anterior deixou o cursor.
   const y = doc.y;
   let x = doc.page.margins.left;
   for (const col of colunas) {
     doc
-      .font(col.bold || opts.bold ? "Helvetica-Bold" : "Helvetica")
+      .font(fonteDe(col))
       .fontSize(9)
       .fillColor(col.cor ?? "#0f172a")
       .text(col.texto, x, y, { width: col.largura, align: col.align ?? "left" });
     x += col.largura;
   }
   doc.fillColor("#000000");
+
+  // 4) Avanca o cursor pela altura REAL da linha, nao por um valor fixo.
+  doc.y = y + alturaLinha;
   doc.moveDown(0.35);
 }
 
@@ -281,7 +340,7 @@ export function desenharLinhasAnalise(
           { texto: fmtMoney(l.valor, currency), largura: largNum, align: "right", bold: negrito },
           { texto: fmtPctPdf(av), largura: largPct, align: "right" },
         ];
-    linhaColunas(doc, cols);
+    linhaColunas(doc, cols, { headerParaRepetir: header });
   }
 }
 
@@ -337,14 +396,18 @@ export async function buildRazaoDetalhePdf(opts: {
   doc.moveDown(0.1);
 
   for (const m of movimentos) {
-    linhaColunas(doc, [
-      { texto: fmtDate(m.data), largura: 65 },
-      { texto: `#${m.lancamentoNumero}`, largura: 55 },
-      { texto: m.historico, largura: 190 },
-      { texto: m.tipo === "D" ? "Débito" : "Crédito", largura: 65, align: "right" },
-      { texto: fmtMoney(m.valor, currency), largura: 60, align: "right" },
-      { texto: fmtMoney(m.saldoCorrido, currency), largura: 60, align: "right", bold: true },
-    ]);
+    linhaColunas(
+      doc,
+      [
+        { texto: fmtDate(m.data), largura: 65 },
+        { texto: `#${m.lancamentoNumero}`, largura: 55 },
+        { texto: m.historico, largura: 190 },
+        { texto: m.tipo === "D" ? "Débito" : "Crédito", largura: 65, align: "right" },
+        { texto: fmtMoney(m.valor, currency), largura: 60, align: "right" },
+        { texto: fmtMoney(m.saldoCorrido, currency), largura: 60, align: "right", bold: true },
+      ],
+      { headerParaRepetir: header }
+    );
   }
 
   doc.end();
