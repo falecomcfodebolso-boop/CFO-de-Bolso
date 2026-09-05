@@ -236,7 +236,7 @@ function linhaColunas(
   let alturaLinha = doc.currentLineHeight();
   for (const col of colunas) {
     doc.font(fonteDe(col));
-    const altura = doc.heightOfString(col.texto, { width: col.largura });
+    const altura = doc.heightOfString(col.texto, { width: Math.max(col.largura - 6, 1) });
     if (altura > alturaLinha) alturaLinha = altura;
   }
 
@@ -263,7 +263,7 @@ function linhaColunas(
       .font(fonteDe(col))
       .fontSize(9)
       .fillColor(col.cor ?? "#0f172a")
-      .text(col.texto, x, y, { width: col.largura, align: col.align ?? "left" });
+      .text(col.texto, x, y, { width: Math.max(col.largura - 6, 1), align: col.align ?? "left" });
     x += col.largura;
   }
   doc.fillColor("#000000");
@@ -410,6 +410,225 @@ export async function buildRazaoDetalhePdf(opts: {
     );
   }
 
+  doc.end();
+  return done;
+}
+
+
+// =====================================================================
+// Ajustes de Acruamento — PDF do detalhamento por papel (uma seção por
+// grupo) e do histórico de apurações. Estático (sem fórmulas — isso só
+// existe na exportação em Excel), mas usa os mesmos números que a tela
+// e a planilha mostram.
+// =====================================================================
+
+export type ItemAcruoPdf = {
+  nome: string;
+  categoriaLabel: string;
+  valorFace: number | null;
+  taxaEfetiva: number | null;
+  tipoTaxa: "fixa" | "flutuante" | null;
+  indiceReferencia: string | null;
+  dataBase: string | null;
+  dias: number | null;
+  valorCalc: number | null;
+  pendente: boolean;
+};
+
+export type GrupoAcruoPdf = {
+  nomeGrupo: string;
+  contaAcruo: string;
+  contaReceita: string;
+  itens: ItemAcruoPdf[];
+  saldoContabilAtual: number;
+  valorInformadoBanco: number | null;
+  dataUltimoAjuste: string | null;
+  diferenca: number | null;
+};
+
+export type ApuracaoHistoricoPdf = {
+  dataBase: string;
+  nomeGrupo: string;
+  contaAcruoCode: string;
+  saldoContabilAntes: number;
+  valorReportadoBanco: number;
+  acruoCalculadoInterno: number | null;
+  diferenca: number;
+  fonte: string | null;
+  lancado: boolean;
+};
+
+export function desenharAjustesGrupo(
+  doc: PDFKit.PDFDocument,
+  grupo: GrupoAcruoPdf,
+  currency: string,
+  orgName: string,
+  dataRef: string
+) {
+  cabecalho(
+    doc,
+    `Ajustes de Acruamento — ${grupo.nomeGrupo}`,
+    orgName,
+    `Referência: ${fmtDate(dataRef)} · conta(s): ${grupo.contaAcruo} · receita: ${grupo.contaReceita}`
+  );
+
+  const subtotal = grupo.itens.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+  linha(doc, "Contábil atual", grupo.saldoContabilAtual, currency, { bold: true });
+  linha(doc, "Calculado (interno, 30/360)", subtotal, currency, { bold: true });
+  linha(
+    doc,
+    `Informado pelo banco${grupo.dataUltimoAjuste ? ` (${fmtDate(grupo.dataUltimoAjuste)})` : ""}`,
+    grupo.valorInformadoBanco,
+    currency,
+    { bold: true }
+  );
+  if (grupo.diferenca != null) {
+    linha(doc, "Diferença (calculado vs. banco)", grupo.diferenca, currency, { bold: true });
+  }
+  espaco(doc, 0.3);
+
+  const largLabel = 170;
+  const larguras = { categoria: 90, valor: 80, taxa: 60, data: 70, dias: 45, calc: 92, obs: 90 };
+  const largGrupo1 = largLabel + larguras.categoria + larguras.valor + larguras.taxa + larguras.data + larguras.dias;
+
+  const header: Coluna[] = [
+    { texto: "Papel", largura: largLabel },
+    { texto: "Categoria", largura: larguras.categoria },
+    { texto: "Valor Face", largura: larguras.valor, align: "right" },
+    { texto: "Taxa", largura: larguras.taxa, align: "right" },
+    { texto: "Data Base", largura: larguras.data, align: "right" },
+    { texto: "Dias", largura: larguras.dias, align: "right" },
+    { texto: "Cálculo Interno", largura: larguras.calc, align: "right" },
+    { texto: "Obs.", largura: larguras.obs },
+  ];
+  linhaColunas(doc, header, { bold: true });
+  doc.moveDown(0.1);
+
+  for (const i of grupo.itens) {
+    linhaColunas(
+      doc,
+      [
+        { texto: i.nome, largura: largLabel },
+        { texto: i.categoriaLabel, largura: larguras.categoria },
+        { texto: i.valorFace != null ? fmtMoney(i.valorFace, currency) : "—", largura: larguras.valor, align: "right" },
+        {
+          texto: i.taxaEfetiva != null ? `${(i.taxaEfetiva * 100).toFixed(3)}%` : "—",
+          largura: larguras.taxa,
+          align: "right",
+        },
+        { texto: i.dataBase ? fmtDate(i.dataBase) : "—", largura: larguras.data, align: "right" },
+        { texto: i.dias != null ? String(i.dias) : "—", largura: larguras.dias, align: "right" },
+        {
+          texto: i.valorCalc != null ? fmtMoney(i.valorCalc, currency) : "— (usa extrato)",
+          largura: larguras.calc,
+          align: "right",
+        },
+        { texto: i.pendente ? "Pending no custodiante" : "", largura: larguras.obs },
+      ],
+      { headerParaRepetir: header }
+    );
+  }
+
+  const temPendentes = grupo.itens.some((i) => i.pendente);
+  if (temPendentes) {
+    const subtotalConfirmado = grupo.itens.filter((i) => !i.pendente).reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+    const subtotalPendente = grupo.itens.filter((i) => i.pendente).reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+    linhaColunas(
+      doc,
+      [
+        { texto: "Subtotal — confirmados pelo custodiante", largura: largGrupo1, bold: true },
+        { texto: fmtMoney(subtotalConfirmado, currency), largura: larguras.calc, align: "right", bold: true },
+        { texto: "", largura: larguras.obs },
+      ],
+      { headerParaRepetir: header }
+    );
+    linhaColunas(
+      doc,
+      [
+        { texto: "Subtotal — pending receipt (sem valor do custodiante)", largura: largGrupo1, bold: true, cor: "#b45309" },
+        { texto: fmtMoney(subtotalPendente, currency), largura: larguras.calc, align: "right", bold: true, cor: "#b45309" },
+        { texto: "", largura: larguras.obs },
+      ],
+      { headerParaRepetir: header }
+    );
+  }
+  linhaColunas(
+    doc,
+    [
+      { texto: `Subtotal ${grupo.nomeGrupo}`, largura: largGrupo1, bold: true },
+      { texto: fmtMoney(subtotal, currency), largura: larguras.calc, align: "right", bold: true },
+      { texto: "", largura: larguras.obs },
+    ],
+    { headerParaRepetir: header }
+  );
+}
+
+export function desenharAjustesHistorico(
+  doc: PDFKit.PDFDocument,
+  apuracoes: ApuracaoHistoricoPdf[],
+  currency: string,
+  orgName: string
+) {
+  cabecalho(doc, "Ajustes de Acruamento — Histórico de Apurações", orgName, "");
+
+  const header: Coluna[] = [
+    { texto: "Data-base", largura: 65 },
+    { texto: "Grupo", largura: 150 },
+    { texto: "Conta acruo", largura: 90 },
+    { texto: "Contábil (antes)", largura: 85, align: "right" },
+    { texto: "Banco/extrato", largura: 85, align: "right" },
+    { texto: "Cálc. interno", largura: 80, align: "right" },
+    { texto: "Diferença", largura: 80, align: "right" },
+    { texto: "Fonte", largura: 100 },
+    { texto: "Status", largura: 60, align: "right" },
+  ];
+  linhaColunas(doc, header, { bold: true });
+  doc.moveDown(0.1);
+
+  for (const a of apuracoes) {
+    linhaColunas(
+      doc,
+      [
+        { texto: fmtDate(a.dataBase), largura: 65 },
+        { texto: a.nomeGrupo, largura: 150 },
+        { texto: a.contaAcruoCode, largura: 90 },
+        { texto: fmtMoney(a.saldoContabilAntes, currency), largura: 85, align: "right" },
+        { texto: fmtMoney(a.valorReportadoBanco, currency), largura: 85, align: "right" },
+        {
+          texto: a.acruoCalculadoInterno != null ? fmtMoney(a.acruoCalculadoInterno, currency) : "—",
+          largura: 80,
+          align: "right",
+        },
+        {
+          texto: fmtMoney(a.diferenca, currency),
+          largura: 80,
+          align: "right",
+          cor: a.diferenca >= 0 ? "#047857" : "#dc2626",
+        },
+        { texto: a.fonte ?? "—", largura: 100 },
+        { texto: a.lancado ? "Lançado" : "Pendente", largura: 60, align: "right" },
+      ],
+      { headerParaRepetir: header }
+    );
+  }
+}
+
+export async function buildAjustesPdf(
+  grupos: GrupoAcruoPdf[],
+  historico: ApuracaoHistoricoPdf[],
+  currency: string,
+  orgName: string,
+  dataRef: string
+): Promise<Buffer> {
+  const { doc, done } = novoDocumentoPaisagem();
+  grupos.forEach((g, i) => {
+    if (i > 0) doc.addPage();
+    desenharAjustesGrupo(doc, g, currency, orgName, dataRef);
+  });
+  if (historico.length > 0) {
+    if (grupos.length > 0) doc.addPage();
+    desenharAjustesHistorico(doc, historico, currency, orgName);
+  }
   doc.end();
   return done;
 }

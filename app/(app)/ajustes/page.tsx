@@ -11,6 +11,7 @@ import { LancarMarcacaoButton } from "./lancar-marcacao-button";
 import { deleteMarcacaoAction } from "./marcacao-actions";
 import Link from "next/link";
 import { Upload } from "lucide-react";
+import { ExportButtons } from "../demonstracoes/export-buttons";
 
 /** Soma o saldo contábil de uma lista de contas separadas por vírgula (pools compartilhados). */
 function somarSaldo(saldos: { conta_code: string; saldo: number }[], codigos: string): number {
@@ -116,15 +117,18 @@ export default async function AjustesPage({
             aprovar, o lançamento de ajuste (variação do acruo) é gerado com um clique.
           </p>
         </div>
-        {podeEscrever && (
-          <Link
-            href="/ajustes/importar"
-            className="shrink-0 inline-flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-md px-3 py-2 hover:bg-slate-800"
-          >
-            <Upload className="h-4 w-4" />
-            Importar de PDF
-          </Link>
-        )}
+        <div className="shrink-0 flex items-center gap-2">
+          <ExportButtons hrefBase="/api/export/ajustes" query={{ data: dataRef }} />
+          {podeEscrever && (
+            <Link
+              href="/ajustes/importar"
+              className="inline-flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-md px-3 py-2 hover:bg-slate-800"
+            >
+              <Upload className="h-4 w-4" />
+              Importar de PDF
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 space-y-2">
