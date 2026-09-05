@@ -130,10 +130,6 @@ export async function uploadImportUnificadoAction(
   if (!tipo) {
     return { error: "Formato não reconhecido. Envie um arquivo .ofx, .csv, .xls/.xlsx ou .pdf." };
   }
-  if (!contaBancariaCode) {
-    return { error: "Escolha a conta bancária deste extrato (usada se o arquivo tiver movimentação de caixa)." };
-  }
-
   const buffer = await file.arrayBuffer();
 
   // Transações de caixa (extrato bancário "tradicional") — tentamos sempre,
@@ -195,10 +191,19 @@ export async function uploadImportUnificadoAction(
     return { error: "Não encontrei nenhuma transação, posição ou apuração reconhecível nesse arquivo." };
   }
 
-  // Cria o lote de transações bancárias, se o arquivo trouxe alguma.
+  // Cria o lote de transações bancárias, se o arquivo trouxe alguma. Só aqui a
+  // conta bancária é obrigatória — ela não se aplica a Statements de custódia
+  // (juros, posições) que não têm seção de caixa nenhuma.
   let loteId: string | undefined;
   let totalTransacoesBanco: number | undefined;
   if (transacoes.length > 0) {
+    if (!contaBancariaCode) {
+      return {
+        error:
+          "Esse arquivo tem movimentação de caixa — escolha a conta bancária deste extrato antes de importar.",
+      };
+    }
+
     const { data: contas, error: contasError } = await supabase
       .from("plano_de_contas")
       .select("code, name, natureza")

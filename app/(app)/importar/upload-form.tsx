@@ -162,10 +162,9 @@ export function UploadForm({
           </label>
           <select
             name="conta_bancaria_code"
-            required
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
           >
-            <option value="">Selecione a conta (Ativo)...</option>
+            <option value="">— não se aplica (sem movimentação de caixa) —</option>
             {contasBancarias.map((c) => (
               <option key={c.code} value={c.code}>
                 {c.code} — {c.name}
@@ -173,8 +172,10 @@ export function UploadForm({
             ))}
           </select>
           <p className="text-xs text-slate-500 mt-1">
-            Usada só se o arquivo tiver movimentação de caixa (extrato de conta corrente). Se for um
-            Statement de custódia sem seção de caixa, essa conta é ignorada.
+            Opcional. Só é necessária se o arquivo tiver movimentação de caixa (extrato de conta
+            corrente) — nesse caso vamos pedir na hora, se você não tiver escolhido aqui. Statements
+            de custódia (juros, posições) usam a conta de cada ativo automaticamente e ignoram esse
+            campo.
           </p>
           {contasBancarias.length === 0 && (
             <p className="text-xs text-amber-700 mt-1">
