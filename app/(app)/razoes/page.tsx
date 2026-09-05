@@ -131,6 +131,8 @@ export default async function RazoesPage({
               currency={currency}
               comparar={comparar}
               labelBaseAV={`o total de ${g.label}`}
+              labelAtual={fmtDate(data)}
+              labelAnterior={fmtDate(dataAnt)}
             />
           </div>
         );

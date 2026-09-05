@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDRE } from "@/lib/accounting/demonstrativos";
 import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
+import { fmtDate } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
 
@@ -134,6 +135,8 @@ export default async function DrePage({
         currency={currency}
         comparar={comparar}
         labelBaseAV="a Receita Líquida"
+        labelAtual={`${fmtDate(inicio)} – ${fmtDate(fim)}`}
+        labelAnterior={`${fmtDate(inicioAnt)} – ${fmtDate(fimAnt)}`}
       />
     </div>
   );

@@ -168,6 +168,8 @@ export default async function BalancoPage({
           currency={currency}
           comparar={comparar}
           labelBaseAV="o Ativo Total"
+          labelAtual={fmtDate(data)}
+          labelAnterior={fmtDate(dataAnt)}
         />
       </div>
 
@@ -180,6 +182,8 @@ export default async function BalancoPage({
           currency={currency}
           comparar={comparar}
           labelBaseAV="o Ativo Total"
+          labelAtual={fmtDate(data)}
+          labelAnterior={fmtDate(dataAnt)}
         />
       </div>
 

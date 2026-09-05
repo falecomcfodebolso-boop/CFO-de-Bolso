@@ -21,6 +21,8 @@ export function TabelaComparativa({
   currency,
   comparar,
   labelBaseAV,
+  labelAtual,
+  labelAnterior,
 }: {
   linhas: LinhaAnalise[];
   baseAV: number;
@@ -28,6 +30,10 @@ export function TabelaComparativa({
   currency: string;
   comparar: boolean;
   labelBaseAV: string;
+  /** Cabeçalho da coluna de valor do período atual (ex: a data de referência). Padrão: "Valor". */
+  labelAtual?: string;
+  /** Cabeçalho da coluna de valor do período de comparação (ex: a data anterior). Padrão: "Período anterior". */
+  labelAnterior?: string;
 }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -36,13 +42,13 @@ export function TabelaComparativa({
           <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
             <tr>
               <th className="text-left px-4 py-2">Conta</th>
-              <th className="text-right px-4 py-2">Valor</th>
+              <th className="text-right px-4 py-2">{labelAtual || "Valor"}</th>
               <th className="text-right px-4 py-2" title={`% sobre ${labelBaseAV}`}>
                 AV %
               </th>
               {comparar && (
                 <>
-                  <th className="text-right px-4 py-2">Período anterior</th>
+                  <th className="text-right px-4 py-2">{labelAnterior || "Período anterior"}</th>
                   <th className="text-right px-4 py-2" title={`% sobre ${labelBaseAV} do período anterior`}>
                     AV % ant.
                   </th>
