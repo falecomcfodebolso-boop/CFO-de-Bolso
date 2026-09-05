@@ -204,13 +204,12 @@ export default async function AjustesPage({
             const ajustesGrupo = ajustes.filter((a) => a.nome_grupo === nomeGrupo);
             const ultimoAjuste =
               ajustesGrupo.find((a) => a.data_base === dataRef) ?? ajustesGrupo.find((a) => a.data_base <= dataRef) ?? null;
-            // Ao comparar com o banco, usa só as posições já confirmadas pelo custodiante — as
-            // "pending receipt" ainda não têm valor reportado, então entrariam como diferença
-            // artificial de 100% se somadas ao lado do cálculo.
-            const baseCalculoParaComparar = temPendentes ? subtotalConfirmado : subtotal;
+            // Compara o total calculado (confirmados + pending) contra o valor informado pelo
+            // banco/custodiante — as posições "pending receipt" entram na conta com a estimativa
+            // interna 30/360, já que ainda não têm valor próprio reportado pelo custodiante.
             const diferencaCalcBanco =
               ultimoAjuste != null
-                ? Math.round((baseCalculoParaComparar - ultimoAjuste.valor_reportado_banco) * 100) / 100
+                ? Math.round((subtotal - ultimoAjuste.valor_reportado_banco) * 100) / 100
                 : null;
             const bate = diferencaCalcBanco != null && Math.abs(diferencaCalcBanco) < 0.01;
             return (
