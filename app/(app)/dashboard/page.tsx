@@ -14,17 +14,24 @@ export default async function DashboardPage() {
   const despesa = totalPorNatureza(saldos, "DESPESA");
   const resultado = receita - despesa;
 
+  // "Próximos vencimentos" só faz sentido para datas ainda não vencidas — sem esse filtro,
+  // um ativo já resgatado/vencido (ex.: um CD que já pagou, ou uma posição já liquidada que
+  // ainda tem data_vencimento cadastrada) aparecia aqui como se fosse pendente.
+  const hojeISO = new Date().toISOString().slice(0, 10);
+
   const [{ data: ativosVencendo }, { data: dividasVencendo }] = await Promise.all([
     supabase
       .from("ativos")
       .select("id, nome, data_vencimento")
       .eq("org_id", currentOrgId)
-      .not("data_vencimento", "is", null),
+      .not("data_vencimento", "is", null)
+      .gte("data_vencimento", hojeISO),
     supabase
       .from("dividas")
       .select("id, nome, data_vencimento")
       .eq("org_id", currentOrgId)
-      .not("data_vencimento", "is", null),
+      .not("data_vencimento", "is", null)
+      .gte("data_vencimento", hojeISO),
   ]);
 
   const proximosVencimentos = [...(ativosVencendo ?? []), ...(dividasVencendo ?? [])]
