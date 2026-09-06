@@ -41,13 +41,9 @@ export default async function ImportarPage() {
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Importar</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Suba um extrato bancário (OFX, CSV, XLS/XLSX ou PDF) para gerar sugestões de lançamento
-          automaticamente — você revisa e confirma cada transação antes de virar lançamento de verdade no
-          Diário, nada é lançado sem sua confirmação. Se o arquivo for o Statement completo de uma conta
-          de custódia (Itaú Private Bank ou Bradesco Bank/Pershing), essa mesma tela já lê tudo o que
-          existir nele — movimentação de caixa, posições da Carteira, juros acruados e marcação a
-          mercado — e mostra cada seção pra você revisar e confirmar, sem precisar subir o mesmo arquivo
-          de novo em Carteira → Importar ou Ajustes → Importar.
+          Suba um extrato (banco ou custódia) e revise o que for encontrado antes de confirmar — nada
+          vira lançamento, ativo ou apuração sem sua aprovação. Um Statement de custódia (Itaú Private
+          Bank ou Bradesco Bank/Pershing) já traz tudo de um único arquivo: caixa, Carteira e Ajustes.
         </p>
       </div>
 

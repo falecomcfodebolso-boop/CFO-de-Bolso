@@ -153,38 +153,11 @@ export function UploadForm({
       state.propostasAcruo ||
       state.propostasMercado);
 
+  const precisaEscolherConta = !!state?.error && state.error.includes("escolha a conta bancária");
+
   if (!jaSubmeteu) {
     return (
       <form action={formAction} className="space-y-4 max-w-lg">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Conta bancária deste extrato
-          </label>
-          <select
-            name="conta_bancaria_code"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="">— não se aplica (sem movimentação de caixa) —</option>
-            {contasBancarias.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.code} — {c.name}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-slate-500 mt-1">
-            Opcional. Só é necessária se o arquivo tiver movimentação de caixa (extrato de conta
-            corrente) — nesse caso vamos pedir na hora, se você não tiver escolhido aqui. Statements
-            de custódia (juros, posições) usam a conta de cada ativo automaticamente e ignoram esse
-            campo.
-          </p>
-          {contasBancarias.length === 0 && (
-            <p className="text-xs text-amber-700 mt-1">
-              Você ainda não tem nenhuma conta do tipo Ativo cadastrada no Plano de Contas. Crie uma (ex:
-              &ldquo;Banco X — Conta Corrente&rdquo;) antes de importar.
-            </p>
-          )}
-        </div>
-
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Arquivo do extrato</label>
           <input
@@ -195,14 +168,40 @@ export function UploadForm({
             className="w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:text-white file:px-3 file:py-2 file:text-sm"
           />
           <p className="text-xs text-slate-500 mt-1">
-            Formatos aceitos: OFX, CSV, XLS/XLSX ou PDF (com texto selecionável). Um PDF de Statement de
-            custódia (Itaú Private Bank ou Bradesco Bank/Pershing) já alimenta de uma vez só a
-            movimentação bancária, a Carteira e as apurações de Ajustes (acruamento e marcação a
-            mercado) — não precisa subir de novo nas outras telas.
+            OFX, CSV, XLS/XLSX ou PDF. Aceita tanto um extrato de conta corrente comum quanto o Statement
+            completo de uma conta de custódia (Itaú Private Bank ou Bradesco Bank/Pershing) — nesse caso já
+            lê tudo de uma vez (caixa, Carteira e Ajustes).
           </p>
         </div>
 
-        {state?.error && (
+        {precisaEscolherConta && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-3 space-y-2">
+            <p className="text-sm text-amber-800">
+              Esse arquivo tem movimentação de caixa — escolha de qual conta bancária ele é e envie o
+              arquivo de novo.
+            </p>
+            <select
+              name="conta_bancaria_code"
+              defaultValue=""
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+            >
+              <option value="">Selecione a conta bancária...</option>
+              {contasBancarias.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} — {c.name}
+                </option>
+              ))}
+            </select>
+            {contasBancarias.length === 0 && (
+              <p className="text-xs text-amber-700">
+                Você ainda não tem nenhuma conta do tipo Ativo cadastrada no Plano de Contas. Crie uma
+                (ex: &ldquo;Banco X — Conta Corrente&rdquo;) antes de importar.
+              </p>
+            )}
+          </div>
+        )}
+
+        {state?.error && !precisaEscolherConta && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
             {state.error}
           </p>
@@ -210,10 +209,10 @@ export function UploadForm({
 
         <button
           type="submit"
-          disabled={pending || contasBancarias.length === 0}
+          disabled={pending}
           className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-60"
         >
-          {pending ? "Lendo arquivo..." : "Importar arquivo"}
+          {pending ? "Lendo arquivo..." : "Importar"}
         </button>
       </form>
     );
