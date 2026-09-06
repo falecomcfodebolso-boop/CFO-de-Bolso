@@ -446,9 +446,11 @@ export default async function AjustesPage({
           </p>
         </div>
 
-        {ativosMercado.length > 0 && (
+        {ativosMercado.filter((a) => Number(saldos.find((s) => s.conta_code === a.conta_code)?.saldo ?? 0) !== 0).length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {ativosMercado.map((a) => {
+            {ativosMercado
+              .filter((a) => Number(saldos.find((s) => s.conta_code === a.conta_code)?.saldo ?? 0) !== 0)
+              .map((a) => {
               const contabilAtual = Number(saldos.find((s) => s.conta_code === a.conta_code)?.saldo ?? 0);
               const marcacoesAtivo = marcacoes.filter((m) => m.ativo_id === a.id);
               const ultimaMarcacao =
