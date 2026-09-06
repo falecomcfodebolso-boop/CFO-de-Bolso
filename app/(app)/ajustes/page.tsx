@@ -279,7 +279,9 @@ export default async function AjustesPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {g.itens.map((i) => {
+                    {g.itens
+                      .filter((i) => i.pendente_custodiante || (i.valorCalc != null && i.valorCalc !== 0))
+                      .map((i) => {
                       const taxaEfetiva =
                         i.tipo_taxa === "flutuante"
                           ? (i.taxa_referencia_atual ?? 0) + (i.spread_taxa ?? 0)
