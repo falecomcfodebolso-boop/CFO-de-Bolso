@@ -16,17 +16,25 @@ export default async function VencimentosPage() {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
 
+  // Agenda so faz sentido para vencimentos futuros - sem esse filtro, um
+  // ativo ja resgatado/vencido (ex.: um CD que ja pagou, ou uma posicao ja
+  // liquidada que ainda tem data_vencimento cadastrada) aparecia aqui como
+  // se estivesse pendente, com "dias restantes" negativo.
+  const hojeISO = new Date().toISOString().slice(0, 10);
+
   const [{ data: ativos, error: errAtivos }, { data: dividas, error: errDividas }, { data: config }] = await Promise.all([
     supabase
       .from("ativos")
       .select("id, nome, custodiante, valor_atual, taxa_cupom, data_vencimento")
       .eq("org_id", currentOrgId)
-      .not("data_vencimento", "is", null),
+      .not("data_vencimento", "is", null)
+      .gte("data_vencimento", hojeISO),
     supabase
       .from("dividas")
       .select("id, nome, credor, valor_atual, data_vencimento")
       .eq("org_id", currentOrgId)
-      .not("data_vencimento", "is", null),
+      .not("data_vencimento", "is", null)
+      .gte("data_vencimento", hojeISO),
     supabase.from("alert_configs").select("*").eq("org_id", currentOrgId).maybeSingle(),
   ]);
   if (errAtivos) throw errAtivos;
