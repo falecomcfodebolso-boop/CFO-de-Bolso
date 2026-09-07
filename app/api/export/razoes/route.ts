@@ -3,7 +3,7 @@ import { requireOrgContext } from "@/lib/org";
 import { getSaldosPorContaAteData, totalPorNatureza, type SaldoConta } from "@/lib/accounting/queries";
 import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
 import { dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
-import { fmtDate } from "@/lib/format";
+import { fmtDateNumerica } from "@/lib/format";
 import { buildLinhasSheet, workbookToBuffer } from "@/lib/export/excel";
 import { buildRelatorioLinhasPdf } from "@/lib/export/pdf";
 import ExcelJS from "exceljs";
@@ -57,8 +57,8 @@ export async function GET(req: NextRequest) {
   ]);
 
   const periodo = comparar
-    ? `Posição em ${fmtDate(data)} · comparado a ${fmtDate(dataAnt)}`
-    : `Posição em ${fmtDate(data)}`;
+    ? `Posição em ${fmtDateNumerica(data)} · comparado a ${fmtDateNumerica(dataAnt)}`
+    : `Posição em ${fmtDateNumerica(data)}`;
 
   const secoes = GRUPOS.map((g) => {
     const { linhas, total, totalAnt } = linhasDoGrupo(saldos, saldosAnt, g.natureza);
