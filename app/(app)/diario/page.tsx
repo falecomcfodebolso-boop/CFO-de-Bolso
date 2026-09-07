@@ -2,7 +2,25 @@ import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovoLancamentoForm } from "./novo-lancamento-form";
 import { fmtDate, fmtMoney } from "@/lib/format";
 
-export default async function DiarioPage() {
+const LIMITE = 500;
+
+function inicioDoAno() {
+  return `${new Date().getFullYear()}-01-01`;
+}
+
+function hoje() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default async function DiarioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ dataInicio?: string; dataFim?: string }>;
+}) {
+  const { dataInicio: dataInicioParam, dataFim: dataFimParam } = await searchParams;
+  const dataInicio = dataInicioParam || inicioDoAno();
+  const dataFim = dataFimParam || hoje();
+
   const { supabase, currentOrgId, currentMembership, memberships } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
 
@@ -12,11 +30,16 @@ export default async function DiarioPage() {
       .from("lancamentos")
       .select("id, numero, data, historico, lancamento_linhas(conta_code, tipo, valor)")
       .eq("org_id", currentOrgId)
+      .gte("data", dataInicio)
+      .lte("data", dataFim)
+      .order("data", { ascending: false })
       .order("numero", { ascending: false })
-      .limit(50),
+      .limit(LIMITE),
   ]);
 
   if (error) throw error;
+
+  const truncado = (lancamentos?.length ?? 0) >= LIMITE;
 
   return (
     <div className="space-y-6">
@@ -39,12 +62,40 @@ export default async function DiarioPage() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-sm font-medium text-slate-700">
-          Últimos lançamentos
+      <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">De</label>
+          <input
+            type="date"
+            name="dataInicio"
+            defaultValue={dataInicio}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          />
         </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">Até</label>
+          <input type="date" name="dataFim" defaultValue={dataFim} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </div>
+        <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
+          Filtrar
+        </button>
+      </form>
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-sm font-medium text-slate-700 flex items-center justify-between">
+          <span>
+            Lançamentos de {fmtDate(dataInicio)} a {fmtDate(dataFim)}
+          </span>
+          <span className="text-xs text-slate-500 font-normal">{lancamentos?.length ?? 0} lançamento(s)</span>
+        </div>
+        {truncado && (
+          <div className="px-4 py-2 text-xs text-amber-700 bg-amber-50 border-b border-amber-100">
+            Mostrando os {LIMITE} lançamentos mais recentes do período selecionado. Estreite o período (De/Até) acima
+            para ver os demais.
+          </div>
+        )}
         {!lancamentos || lancamentos.length === 0 ? (
-          <p className="text-sm text-slate-400 px-4 py-4">Nenhum lançamento ainda.</p>
+          <p className="text-sm text-slate-400 px-4 py-4">Nenhum lançamento neste período.</p>
         ) : (
           <div className="divide-y divide-slate-100">
             {lancamentos.map((l) => (
