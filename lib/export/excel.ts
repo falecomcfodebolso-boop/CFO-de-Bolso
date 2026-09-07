@@ -216,10 +216,10 @@ export function buildLinhasSheet(
 
 export function buildRazaoDetalheSheet(
   wb: ExcelJS.Workbook,
-  opts: { contaLabel: string; movimentos: LinhaMovimento[]; orgName: string; periodo: string }
+  opts: { contaLabel: string; movimentos: LinhaMovimento[]; orgName: string; periodo: string; sheetName?: string }
 ) {
-  const { contaLabel, movimentos, orgName, periodo } = opts;
-  const ws = wb.addWorksheet("Razão");
+  const { contaLabel, movimentos, orgName, periodo, sheetName } = opts;
+  const ws = wb.addWorksheet(nomeAbaValido(sheetName ?? "Razão"));
   ws.columns = [{ width: 14 }, { width: 12 }, { width: 40 }, { width: 12 }, { width: 16 }, { width: 16 }];
 
   ws.mergeCells("A1:F1");

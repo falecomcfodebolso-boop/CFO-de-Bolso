@@ -78,6 +78,29 @@ export async function getMovimentoConta(
   return data ?? [];
 }
 
+/**
+ * Igual a `getMovimentoConta`, mas para TODAS as contas da organização de uma vez (uma
+ * query só, em vez de N) — usado pela exportação detalhada de Razões, que precisa do
+ * extrato completo (não só o saldo) de cada conta com movimento. Filtra até `ateData`
+ * (inclusive) para poder calcular o saldo corrido de cada conta a partir do começo.
+ */
+export async function getMovimentoTodasContas(
+  supabase: SupabaseClient,
+  orgId: string,
+  ateData: string
+) {
+  const { data, error } = await supabase
+    .from("v_movimento_contas")
+    .select("*")
+    .eq("org_id", orgId)
+    .lte("data", ateData)
+    .order("conta_code", { ascending: true })
+    .order("data", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
 export function totalPorNatureza(saldos: SaldoConta[], natureza: SaldoConta["natureza"]) {
   return arredondarCentavos(
     saldos.filter((s) => s.natureza === natureza).reduce((acc, s) => acc + Number(s.saldo), 0)

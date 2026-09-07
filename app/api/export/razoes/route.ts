@@ -1,108 +1,161 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/org";
-import { getSaldosPorContaAteData, totalPorNatureza, type SaldoConta } from "@/lib/accounting/queries";
+import { getMovimentoTodasContas } from "@/lib/accounting/queries";
 import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
-import { dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
 import { fmtDateNumerica } from "@/lib/format";
-import { buildLinhasSheet, workbookToBuffer } from "@/lib/export/excel";
-import { buildRelatorioLinhasPdf } from "@/lib/export/pdf";
+import { buildRazaoDetalheSheet, workbookToBuffer, type LinhaMovimento } from "@/lib/export/excel";
+import { buildRazoesDetalhadoPdf, type LinhaMovimentoPdf } from "@/lib/export/pdf";
 import ExcelJS from "exceljs";
 
 export const runtime = "nodejs";
 
-const GRUPOS: { natureza: SaldoConta["natureza"]; label: string; sheet: string }[] = [
-  { natureza: "ATIVO", label: "1 · Ativo", sheet: "Ativo" },
-  { natureza: "PASSIVO", label: "2 · Passivo", sheet: "Passivo" },
-  { natureza: "PL", label: "3 · Patrimônio Líquido", sheet: "PL" },
-  { natureza: "RECEITA", label: "4 · Receitas", sheet: "Receitas" },
-  { natureza: "DESPESA", label: "5 · Despesas", sheet: "Despesas" },
-];
+export type MovimentoConta = {
+  conta_code: string;
+  conta_name: string;
+  data: string;
+  lancamento_numero: number | string;
+  historico: string;
+  tipo: "D" | "C";
+  valor: number;
+  valor_saldo: number;
+};
 
 function hoje() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function linhasDoGrupo(saldos: SaldoConta[], saldosAnt: SaldoConta[], natureza: SaldoConta["natureza"]) {
-  const contas = saldos.filter((s) => s.natureza === natureza);
-  const antPorCodigo = new Map(saldosAnt.filter((s) => s.natureza === natureza).map((s) => [s.conta_code, s]));
-  const total = totalPorNatureza(saldos, natureza);
-  const totalAnt = totalPorNatureza(saldosAnt, natureza);
-  const linhas: LinhaAnalise[] = contas.map((c) => ({
-    key: c.conta_code,
-    label: `${c.conta_code} — ${c.conta_name}`,
-    valor: Number(c.saldo),
-    valorAnterior: antPorCodigo.has(c.conta_code) ? Number(antPorCodigo.get(c.conta_code)!.saldo) : null,
-    indent: true,
-  }));
-  return { linhas, total, totalAnt };
+function inicioDoAno(data: string) {
+  return `${data.slice(0, 4)}-01-01`;
 }
 
+/** Remove caracteres que o Excel proíbe em nome de aba e garante nomes únicos. */
+function nomesDeAbaUnicos(codigos: string[]): Map<string, string> {
+  const usados = new Set<string>();
+  const porCodigo = new Map<string, string>();
+  for (const codigo of codigos) {
+    let base = codigo.replace(/[\\/?*[\]]/g, "-").slice(0, 31);
+    let nome = base;
+    let sufixo = 2;
+    while (usados.has(nome)) {
+      nome = `${base.slice(0, 28)}-${sufixo}`;
+      sufixo++;
+    }
+    usados.add(nome);
+    porCodigo.set(codigo, nome);
+  }
+  return porCodigo;
+}
+
+/**
+ * Exportação DETALHADA de Razões: em vez do resumo de saldos por conta (que é o que a
+ * tela de Razões mostra), gera um arquivo com o extrato completo (razão) de cada conta
+ * com movimento no período — uma aba (Excel) ou seção (PDF) por conta, no mesmo formato
+ * que a tela /razoes/[code] mostra para uma conta só, só que para todas de uma vez.
+ */
 export async function GET(req: NextRequest) {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const orgName = currentMembership.organizations?.name ?? "";
   const currency = currentMembership.organizations?.base_currency ?? "USD";
 
   const dataParam = req.nextUrl.searchParams.get("data") || hoje();
-  const comparar = req.nextUrl.searchParams.get("comparar") !== "0";
-  const dataAntParam = req.nextUrl.searchParams.get("dataAnt") || dataComparacaoPadrao(dataParam);
   const formato = req.nextUrl.searchParams.get("formato") === "pdf" ? "pdf" : "xlsx";
 
   const intervalo = await getIntervaloDeLancamentos(supabase, currentOrgId);
   const { data } = resolverDataReferencia(dataParam, intervalo);
-  const { data: dataAnt } = resolverDataReferencia(dataAntParam, intervalo);
+  const dataInicioParam = req.nextUrl.searchParams.get("dataInicio") || inicioDoAno(data);
+  const { data: dataInicio } = resolverDataReferencia(dataInicioParam, intervalo);
 
-  const [saldos, saldosAnt] = await Promise.all([
-    getSaldosPorContaAteData(supabase, currentOrgId, data),
-    comparar ? getSaldosPorContaAteData(supabase, currentOrgId, dataAnt) : Promise.resolve([] as SaldoConta[]),
-  ]);
+  // Uma query só para todas as contas (em vez de uma por conta) — pega tudo até a data
+  // de referência para poder calcular o saldo corrido de cada conta desde o começo, e
+  // filtra para o período [dataInicio, data] só na hora de montar as linhas exibidas.
+  const todosMovimentos = (await getMovimentoTodasContas(supabase, currentOrgId, data)) as MovimentoConta[];
 
-  const periodo = comparar
-    ? `Posição em ${fmtDateNumerica(data)} · comparado a ${fmtDateNumerica(dataAnt)}`
-    : `Posição em ${fmtDateNumerica(data)}`;
+  const porConta = new Map<string, MovimentoConta[]>();
+  for (const m of todosMovimentos) {
+    if (!porConta.has(m.conta_code)) porConta.set(m.conta_code, []);
+    porConta.get(m.conta_code)!.push(m);
+  }
 
-  const secoes = GRUPOS.map((g) => {
-    const { linhas, total, totalAnt } = linhasDoGrupo(saldos, saldosAnt, g.natureza);
-    linhas.push({
-      key: `${g.natureza}-total`,
-      label: `Total ${g.label}`,
-      valor: total,
-      valorAnterior: comparar ? totalAnt : null,
-      subtotal: true,
+  type ContaDetalhe = { contaCode: string; contaLabel: string; movimentos: LinhaMovimento[] };
+  const contas: ContaDetalhe[] = [];
+  for (const [contaCode, movs] of Array.from(porConta.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    let saldoCorrido = 0;
+    const comSaldo = movs.map((m) => {
+      saldoCorrido += Number(m.valor_saldo);
+      return { ...m, saldoCorrido };
     });
-    return { titulo: `Razões — ${g.label}`, sheet: g.sheet, linhas, baseAV: total || 1, baseAVAnterior: totalAnt || 1 };
-  }).filter((s) => s.linhas.length > 1);
+    const doPeriodo = comSaldo.filter((m) => m.data >= dataInicio && m.data <= data);
+    if (doPeriodo.length === 0) continue;
+
+    contas.push({
+      contaCode,
+      contaLabel: `${contaCode} — ${movs[0].conta_name}`,
+      movimentos: doPeriodo.map((m) => ({
+        data: m.data,
+        lancamentoNumero: m.lancamento_numero,
+        historico: m.historico,
+        tipo: m.tipo,
+        valor: Number(m.valor),
+        saldoCorrido: m.saldoCorrido,
+      })),
+    });
+  }
+
+  const periodo = `Detalhamento de ${fmtDateNumerica(dataInicio)} a ${fmtDateNumerica(data)}`;
 
   if (formato === "pdf") {
-    const buffer = await buildRelatorioLinhasPdf(
-      secoes.map((s) => ({ titulo: s.titulo, linhas: s.linhas, baseAV: s.baseAV, baseAVAnterior: s.baseAVAnterior })),
-      { currency, orgName, periodo, comparar }
-    );
+    const secoes: { contaLabel: string; movimentos: LinhaMovimentoPdf[] }[] = contas.map((c) => ({
+      contaLabel: c.contaLabel,
+      movimentos: c.movimentos,
+    }));
+    const buffer = await buildRazoesDetalhadoPdf(secoes, { currency, orgName, periodo });
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="razoes-${data}.pdf"`,
+        "Content-Disposition": `attachment; filename="razoes-detalhado-${data}.pdf"`,
       },
     });
   }
 
+  const nomesAba = nomesDeAbaUnicos(contas.map((c) => c.contaCode));
+
   const wb = new ExcelJS.Workbook();
-  for (const s of secoes) {
-    buildLinhasSheet(wb, {
-      titulo: s.titulo,
-      sheetName: s.sheet,
-      linhas: s.linhas,
-      baseAV: s.baseAV,
-      baseAVAnterior: s.baseAVAnterior,
+
+  // Aba de índice, primeiro, pra facilitar navegar entre as dezenas de contas.
+  const wsIndice = wb.addWorksheet("Índice");
+  wsIndice.columns = [{ width: 16 }, { width: 50 }];
+  wsIndice.mergeCells("A1:B1");
+  wsIndice.getCell("A1").value = "Razões — Índice de contas";
+  wsIndice.getCell("A1").font = { bold: true, size: 14 };
+  wsIndice.mergeCells("A2:B2");
+  wsIndice.getCell("A2").value = orgName;
+  wsIndice.getCell("A2").font = { size: 10, color: { argb: "FF64748B" } };
+  wsIndice.mergeCells("A3:B3");
+  wsIndice.getCell("A3").value = periodo;
+  wsIndice.getCell("A3").font = { size: 10, color: { argb: "FF64748B" } };
+  wsIndice.addRow([]);
+  const header = wsIndice.addRow(["Conta", "Aba"]);
+  header.font = { bold: true };
+  header.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } }));
+  for (const c of contas) {
+    wsIndice.addRow([c.contaLabel, nomesAba.get(c.contaCode)]);
+  }
+
+  for (const c of contas) {
+    buildRazaoDetalheSheet(wb, {
+      contaLabel: c.contaLabel,
+      movimentos: c.movimentos,
       orgName,
       periodo,
-      comparar,
+      sheetName: nomesAba.get(c.contaCode),
     });
   }
+
   const buffer = await workbookToBuffer(wb);
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="razoes-${data}.xlsx"`,
+      "Content-Disposition": `attachment; filename="razoes-detalhado-${data}.xlsx"`,
     },
   });
 }

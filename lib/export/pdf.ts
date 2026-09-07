@@ -373,15 +373,17 @@ export async function buildRelatorioLinhasPdf(
   return done;
 }
 
-export async function buildRazaoDetalhePdf(opts: {
-  contaLabel: string;
-  movimentos: LinhaMovimentoPdf[];
-  currency: string;
-  orgName: string;
-  periodo: string;
-}): Promise<Buffer> {
+function desenharRazaoDetalhe(
+  doc: PDFKit.PDFDocument,
+  opts: {
+    contaLabel: string;
+    movimentos: LinhaMovimentoPdf[];
+    currency: string;
+    orgName: string;
+    periodo: string;
+  }
+) {
   const { contaLabel, movimentos, currency, orgName, periodo } = opts;
-  const { doc, done } = novoDocumento();
   cabecalho(doc, contaLabel, orgName, periodo);
 
   const header: Coluna[] = [
@@ -409,7 +411,35 @@ export async function buildRazaoDetalhePdf(opts: {
       { headerParaRepetir: header }
     );
   }
+}
 
+export async function buildRazaoDetalhePdf(opts: {
+  contaLabel: string;
+  movimentos: LinhaMovimentoPdf[];
+  currency: string;
+  orgName: string;
+  periodo: string;
+}): Promise<Buffer> {
+  const { doc, done } = novoDocumento();
+  desenharRazaoDetalhe(doc, opts);
+  doc.end();
+  return done;
+}
+
+/**
+ * Versão "todas as contas" do razão detalhado — uma seção (com quebra de página entre
+ * elas) para cada conta com movimento, usada pelo botão de exportação da tela de Razões
+ * (que mostra o detalhe de cada conta, não só o resumo de saldos).
+ */
+export async function buildRazoesDetalhadoPdf(
+  secoes: { contaLabel: string; movimentos: LinhaMovimentoPdf[] }[],
+  comum: { currency: string; orgName: string; periodo: string }
+): Promise<Buffer> {
+  const { doc, done } = novoDocumento();
+  secoes.forEach((s, i) => {
+    if (i > 0) doc.addPage();
+    desenharRazaoDetalhe(doc, { ...s, ...comum });
+  });
   doc.end();
   return done;
 }
