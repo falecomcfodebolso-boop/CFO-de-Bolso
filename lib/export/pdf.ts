@@ -415,6 +415,59 @@ export async function buildRazaoDetalhePdf(opts: {
 }
 
 
+export type LinhaDiarioPdf = {
+  data: string;
+  lancamentoNumero: number | string;
+  historico: string;
+  contaCode: string;
+  contaName: string;
+  tipo: "D" | "C";
+  valor: number;
+};
+
+export async function buildDiarioPdf(opts: {
+  linhas: LinhaDiarioPdf[];
+  currency: string;
+  orgName: string;
+  periodo: string;
+}): Promise<Buffer> {
+  const { linhas, currency, orgName, periodo } = opts;
+  const { doc, done } = novoDocumentoPaisagem();
+  cabecalho(doc, "Diário — Lançamentos", orgName, periodo);
+
+  const header: Coluna[] = [
+    { texto: "Data", largura: 65 },
+    { texto: "Nº Lçto", largura: 55 },
+    { texto: "Histórico", largura: 230 },
+    { texto: "Conta", largura: 75 },
+    { texto: "Nome da conta", largura: 220 },
+    { texto: "Natureza", largura: 65, align: "right" },
+    { texto: "Valor", largura: 70, align: "right" },
+  ];
+  linhaColunas(doc, header, { bold: true });
+  doc.moveDown(0.1);
+
+  for (const l of linhas) {
+    linhaColunas(
+      doc,
+      [
+        { texto: fmtDate(l.data), largura: 65 },
+        { texto: `#${l.lancamentoNumero}`, largura: 55 },
+        { texto: l.historico, largura: 230 },
+        { texto: l.contaCode, largura: 75 },
+        { texto: l.contaName, largura: 220 },
+        { texto: l.tipo === "D" ? "Débito" : "Crédito", largura: 65, align: "right" },
+        { texto: fmtMoney(l.valor, currency), largura: 70, align: "right" },
+      ],
+      { headerParaRepetir: header }
+    );
+  }
+
+  doc.end();
+  return done;
+}
+
+
 // =====================================================================
 // Ajustes de Acruamento — PDF do detalhamento por papel (uma seção por
 // grupo) e do histórico de apurações. Estático (sem fórmulas — isso só

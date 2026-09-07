@@ -1,6 +1,7 @@
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovoLancamentoForm } from "./novo-lancamento-form";
 import { fmtDate, fmtMoney } from "@/lib/format";
+import { ExportButtons } from "../demonstracoes/export-buttons";
 
 const LIMITE = 500;
 
@@ -43,11 +44,14 @@ export default async function DiarioPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Diário</h1>
-        <p className="text-sm text-slate-500">
-          Lançamentos em partida dobrada. O banco valida automaticamente que débitos = créditos.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Diário</h1>
+          <p className="text-sm text-slate-500">
+            Lançamentos em partida dobrada. O banco valida automaticamente que débitos = créditos.
+          </p>
+        </div>
+        <ExportButtons hrefBase="/api/export/diario" query={{ dataInicio, dataFim }} />
       </div>
 
       {canWrite(currentMembership.role) && (

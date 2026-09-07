@@ -253,6 +253,56 @@ export function buildRazaoDetalheSheet(
 }
 
 
+export type LinhaDiario = {
+  data: string;
+  lancamentoNumero: number | string;
+  historico: string;
+  contaCode: string;
+  contaName: string;
+  tipo: "D" | "C";
+  valor: number;
+};
+
+export function buildDiarioSheet(
+  wb: ExcelJS.Workbook,
+  opts: { linhas: LinhaDiario[]; orgName: string; periodo: string }
+) {
+  const { linhas, orgName, periodo } = opts;
+  const ws = wb.addWorksheet("Diário");
+  ws.columns = [{ width: 14 }, { width: 12 }, { width: 40 }, { width: 16 }, { width: 32 }, { width: 12 }, { width: 16 }];
+
+  ws.mergeCells("A1:G1");
+  ws.getCell("A1").value = "Diário — Lançamentos";
+  ws.getCell("A1").font = { bold: true, size: 14 };
+  ws.mergeCells("A2:G2");
+  ws.getCell("A2").value = orgName;
+  ws.getCell("A2").font = { size: 10, color: { argb: "FF64748B" } };
+  ws.mergeCells("A3:G3");
+  ws.getCell("A3").value = periodo;
+  ws.getCell("A3").font = { size: 10, color: { argb: "FF64748B" } };
+  ws.addRow([]);
+
+  const header = ws.addRow(["Data", "Nº Lçto", "Histórico", "Conta", "Nome da conta", "Natureza", "Valor"]);
+  header.font = { bold: true };
+  header.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } }));
+
+  for (const l of linhas) {
+    const row = ws.addRow([
+      new Date(`${l.data}T00:00:00Z`),
+      l.lancamentoNumero,
+      l.historico,
+      l.contaCode,
+      l.contaName,
+      l.tipo === "D" ? "Débito" : "Crédito",
+      l.valor,
+    ]);
+    row.getCell(1).numFmt = DATEFMT;
+    row.getCell(7).numFmt = NUMFMT;
+  }
+  return ws;
+}
+
+
 // =====================================================================
 // Ajustes de Acruamento — exporta o detalhamento por papel (uma aba por
 // grupo) e o histórico de apurações, com as FÓRMULAS de cálculo do
