@@ -56,11 +56,35 @@ function encontrarPorIsin(entrada: EntradaAcruoExtrato, ativos: AtivoComIsin[]):
   );
 }
 
-/** Fallback quando o extrato não traz ISIN (ex.: discount notes, alguns floaters) — casa pelo nome. */
+/**
+ * Normaliza pra comparação de nome: maiúsculas, sem acento, sem espaço/pontuação — assim
+ * "CLN ARC Mittal" (cadastro) bate com "CLN ARCMITTAL 5.7 RN6437 05.01.28" (extrato), que
+ * junta "ARC" e "MITTAL" sem espaço.
+ */
+function normalizarNomeAtivoAcruo(s: string): string {
+  return s
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+/**
+ * Fallback quando o extrato não traz ISIN (ex.: discount notes, alguns floaters) — casa pelo
+ * nome (normalizado, ver acima). Quando mais de um Ativo cadastrado bate como substring do nome
+ * do extrato (ex.: "CLN HSBC" e "HSBC" cadastrados separadamente, e o extrato traz "CLN HSBC
+ * 5.45 RN6400 05.01.28", que contém os dois), fica com o nome mais específico (mais longo depois
+ * de normalizado) em vez de desistir só porque há mais de um candidato — só desiste se ainda
+ * houver empate depois disso.
+ */
 function encontrarPorNome(entrada: EntradaAcruoExtrato, ativos: AtivoComIsin[]): AtivoComIsin | null {
-  const nomeEntrada = entrada.nome.toUpperCase();
-  const candidatos = ativos.filter((a) => nomeEntrada.includes(a.nome.toUpperCase()));
-  return candidatos.length === 1 ? candidatos[0] : null;
+  const nomeEntrada = normalizarNomeAtivoAcruo(entrada.nome);
+  const candidatos = ativos.filter((a) => nomeEntrada.includes(normalizarNomeAtivoAcruo(a.nome)));
+  if (candidatos.length === 0) return null;
+  if (candidatos.length === 1) return candidatos[0];
+  const maiorTamanho = Math.max(...candidatos.map((a) => normalizarNomeAtivoAcruo(a.nome).length));
+  const maisEspecificos = candidatos.filter((a) => normalizarNomeAtivoAcruo(a.nome).length === maiorTamanho);
+  return maisEspecificos.length === 1 ? maisEspecificos[0] : null;
 }
 
 /**
