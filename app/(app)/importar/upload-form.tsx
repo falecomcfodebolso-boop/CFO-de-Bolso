@@ -220,6 +220,19 @@ export function UploadForm({
 
   return (
     <div className="space-y-8">
+      {precisaEscolherConta && !state?.loteId && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 text-sm text-amber-800 space-y-1">
+          <p>
+            Esse arquivo também tem movimentação de caixa (juros recebidos, por exemplo) — as posições e
+            apurações abaixo já foram reconhecidas e você pode revisá-las e confirmá-las agora normalmente.
+          </p>
+          <p>
+            Para importar as transações de caixa também, suba o mesmo arquivo de novo logo abaixo e, dessa
+            vez, escolha a conta bancária a que ele pertence antes de enviar.
+          </p>
+        </div>
+      )}
+
       {state?.loteId && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-4 text-sm text-blue-800">
           Encontrei {state.totalTransacoesBanco}{" "}

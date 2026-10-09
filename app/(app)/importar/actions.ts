@@ -198,9 +198,21 @@ export async function uploadImportUnificadoAction(
   let totalTransacoesBanco: number | undefined;
   if (transacoes.length > 0) {
     if (!contaBancariaCode) {
+      // IMPORTANTE: mesmo sem a conta bancária escolhida ainda, devolve também o que
+      // já foi reconhecido de posições/acruamento/marcação — sem isso, a tela só
+      // mostrava o pedido de conta bancária e escondia os ativos já identificados,
+      // dando a falsa impressão de que o arquivo "não reconhece as contas dos ativos"
+      // quando na verdade eles já tinham sido lidos corretamente deste mesmo PDF.
       return {
         error:
           "Esse arquivo tem movimentação de caixa — escolha a conta bancária deste extrato antes de importar.",
+        dataBase,
+        formato,
+        propostasAtivos: propostasAtivos.length > 0 ? propostasAtivos : undefined,
+        ativosJaCadastrados: ativosJaCadastrados.length > 0 ? ativosJaCadastrados : undefined,
+        propostasAcruo: propostasAcruo.length > 0 ? propostasAcruo : undefined,
+        naoReconhecidas: naoReconhecidas.length > 0 ? naoReconhecidas : undefined,
+        propostasMercado: propostasMercado.length > 0 ? propostasMercado : undefined,
       };
     }
 
