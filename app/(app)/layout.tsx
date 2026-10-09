@@ -15,6 +15,7 @@ import {
   Layers,
   CreditCard,
   Scale3D,
+  CalendarClock,
 } from "lucide-react";
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
@@ -36,6 +37,7 @@ function montarNav(ehBrasilReais: boolean, temVariasEmpresas: boolean): NavItem[
     { href: "/dividas", label: "Dívidas", icon: <CreditCard className={ICON_CLASS} /> },
     { href: "/ajustes", label: "Ajustes", icon: <Scale3D className={ICON_CLASS} /> },
     { href: "/vencimentos", label: "Vencimentos", icon: <BellRing className={ICON_CLASS} /> },
+    { href: "/previsao-caixa", label: "Previsão de Pagamentos", icon: <CalendarClock className={ICON_CLASS} /> },
   ];
   if (ehBrasilReais) {
     nav.push({ href: "/obrigacoes-fiscais", label: "Obrigações Fiscais", icon: <Landmark className={ICON_CLASS} /> });
