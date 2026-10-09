@@ -42,6 +42,19 @@ export function UploadForm({
   const [linhasMercado, setLinhasMercado] = useState<LinhaMercado[] | null>(null);
   const [fonte, setFonte] = useState("");
 
+  // Guarda o arquivo original em memoria (o objeto File, nao so o nome) pra
+  // poder reenviar com a conta bancaria escolhida sem o usuario precisar
+  // selecionar o arquivo de novo quando o upload detecta transacoes de caixa
+  // mas ainda nao sabe a conta.
+  const [arquivoAtual, setArquivoAtual] = useState<File | null>(null);
+  const [contaEscolhida, setContaEscolhida] = useState("");
+  const [resultadoConta, setResultadoConta] = useState<{
+    loteId?: string;
+    totalTransacoesBanco?: number;
+    error?: string;
+  } | null>(null);
+  const [enviandoContaPending, startEnviarConta] = useTransition();
+
   const [criadosAtivos, setCriadosAtivos] = useState<number | null>(null);
   const [erroAtivos, setErroAtivos] = useState<string | null>(null);
   const [criandoAtivosPending, startCriarAtivos] = useTransition();
@@ -145,6 +158,31 @@ export function UploadForm({
     });
   }
 
+  function handleConfirmarConta() {
+    if (!contaEscolhida) return;
+    if (!arquivoAtual) {
+      setResultadoConta({
+        error: "Nao tenho mais o arquivo em memoria \u2014 selecione o arquivo original de novo abaixo.",
+      });
+      return;
+    }
+    setResultadoConta(null);
+    startEnviarConta(async () => {
+      const fd = new FormData();
+      fd.append("arquivo", arquivoAtual);
+      fd.append("conta_bancaria_code", contaEscolhida);
+      const resultado = await uploadImportUnificadoAction(null, fd);
+      if (resultado?.error) {
+        setResultadoConta({ error: resultado.error });
+        return;
+      }
+      setResultadoConta({
+        loteId: resultado?.loteId,
+        totalTransacoesBanco: resultado?.totalTransacoesBanco,
+      });
+    });
+  }
+
   const jaSubmeteu =
     !!state &&
     (state.loteId ||
@@ -165,6 +203,7 @@ export function UploadForm({
             name="arquivo"
             required
             accept=".ofx,.qfx,.csv,.xls,.xlsx,.pdf"
+            onChange={(e) => setArquivoAtual(e.target.files?.[0] ?? null)}
             className="w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:text-white file:px-3 file:py-2 file:text-sm"
           />
           <p className="text-xs text-slate-500 mt-1">
@@ -220,25 +259,69 @@ export function UploadForm({
 
   return (
     <div className="space-y-8">
-      {precisaEscolherConta && !state?.loteId && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 text-sm text-amber-800 space-y-1">
+      {precisaEscolherConta && !state?.loteId && !resultadoConta?.loteId && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 text-sm text-amber-800 space-y-3">
           <p>
             Esse arquivo também tem movimentação de caixa (juros recebidos, por exemplo) — as posições e
             apurações abaixo já foram reconhecidas e você pode revisá-las e confirmá-las agora normalmente.
           </p>
           <p>
-            Para importar as transações de caixa também, suba o mesmo arquivo de novo logo abaixo e, dessa
-            vez, escolha a conta bancária a que ele pertence antes de enviar.
+            Para importar as transações de caixa também, escolha a conta bancária a que esse extrato
+            pertence — não precisa subir o arquivo de novo:
           </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={contaEscolhida}
+              onChange={(e) => setContaEscolhida(e.target.value)}
+              className="rounded-md border border-amber-300 px-3 py-2 text-sm bg-white text-amber-900"
+            >
+              <option value="">Selecione a conta bancária...</option>
+              {contasBancarias.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} — {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleConfirmarConta}
+              disabled={!contaEscolhida || enviandoContaPending}
+              className="rounded-md bg-amber-800 text-white text-sm font-medium px-4 py-2 hover:bg-amber-900 disabled:opacity-60"
+            >
+              {enviandoContaPending ? "Importando transações..." : "Importar transações dessa conta"}
+            </button>
+          </div>
+          {!arquivoAtual && (
+            <p className="text-xs text-amber-700">
+              Não encontrei o arquivo original em memória (pode acontecer se a página foi recarregada) —
+              selecione-o de novo pra confirmar a conta bancária:{" "}
+              <input
+                type="file"
+                accept=".ofx,.qfx,.csv,.xls,.xlsx,.pdf"
+                onChange={(e) => setArquivoAtual(e.target.files?.[0] ?? null)}
+                className="inline-block text-xs"
+              />
+            </p>
+          )}
+          {resultadoConta?.error && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+              {resultadoConta.error}
+            </p>
+          )}
         </div>
       )}
 
-      {state?.loteId && (
+      {(state?.loteId || resultadoConta?.loteId) && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-4 text-sm text-blue-800">
-          Encontrei {state.totalTransacoesBanco}{" "}
-          {state.totalTransacoesBanco === 1 ? "transação bancária" : "transações bancárias"} nesse
-          arquivo.{" "}
-          <Link href={`/importar/${state.loteId}`} className="underline font-medium">
+          Encontrei {state?.totalTransacoesBanco ?? resultadoConta?.totalTransacoesBanco}{" "}
+          {(state?.totalTransacoesBanco ?? resultadoConta?.totalTransacoesBanco) === 1
+            ? "transação bancária"
+            : "transações bancárias"}{" "}
+          nesse arquivo.{" "}
+          <Link
+            href={`/importar/${state?.loteId ?? resultadoConta?.loteId}`}
+            className="underline font-medium"
+          >
             Revisar e conciliar →
           </Link>
         </div>
