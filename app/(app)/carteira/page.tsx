@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Upload } from "lucide-react";
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovoAtivoForm } from "./novo-ativo-form";
-import { deleteAtivoAction } from "./actions";
+import { deleteAtivoAction, updateAtivoDetalhesAction } from "./actions";
 import { AnaliseCarteira } from "./analise-carteira";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import {
@@ -293,6 +293,11 @@ export default async function CarteiraPage({
                 <th className="text-right px-4 py-2">Cupom</th>
                 <th className="text-right px-4 py-2">Vencimento</th>
                 <th className="text-right px-4 py-2">Prazo</th>
+                <th className="text-right px-4 py-2">Qtd. papéis</th>
+                <th className="text-right px-4 py-2">Valor de face</th>
+                <th className="text-right px-4 py-2" title="Quantidade × Valor de face — pra cruzar com o saldo contábil">
+                  Principal (qtd × face)
+                </th>
                 {podeEscrever && <th></th>}
               </tr>
             </thead>
@@ -323,6 +328,55 @@ export default async function CarteiraPage({
                     <td className="px-4 py-2 text-right text-slate-500">{a.data_vencimento ?? "—"}</td>
                     <td className="px-4 py-2 text-right text-slate-500">
                       {prazoAnos != null ? `${prazoAnos.toFixed(1)}a` : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-500">
+                      {podeEscrever ? (
+                        <form action={updateAtivoDetalhesAction} className="flex items-center justify-end gap-1">
+                          <input type="hidden" name="id" value={a.id} />
+                          <input
+                            name="quantidade"
+                            type="number"
+                            step="0.0001"
+                            defaultValue={a.quantidade ?? ""}
+                            placeholder="—"
+                            className="w-20 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                          />
+                          <button type="submit" className="text-slate-400 hover:text-emerald-600 text-xs" title="Salvar quantidade">
+                            ✓
+                          </button>
+                        </form>
+                      ) : a.quantidade != null ? (
+                        new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 }).format(Number(a.quantidade))
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-500">
+                      {podeEscrever ? (
+                        <form action={updateAtivoDetalhesAction} className="flex items-center justify-end gap-1">
+                          <input type="hidden" name="id" value={a.id} />
+                          <input
+                            name="valor_face"
+                            type="number"
+                            step="0.01"
+                            defaultValue={a.valor_face ?? ""}
+                            placeholder="—"
+                            className="w-24 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                          />
+                          <button type="submit" className="text-slate-400 hover:text-emerald-600 text-xs" title="Salvar valor de face">
+                            ✓
+                          </button>
+                        </form>
+                      ) : a.valor_face != null ? (
+                        fmtMoney(Number(a.valor_face), currency)
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-500">
+                      {a.quantidade != null && a.valor_face != null
+                        ? fmtMoney(Number(a.quantidade) * Number(a.valor_face), currency)
+                        : "—"}
                     </td>
                     {podeEscrever && (
                       <td className="px-4 py-2 text-right">

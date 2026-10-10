@@ -27,6 +27,8 @@ export function NovoAtivoForm() {
       <input name="valor_atual" type="number" step="0.01" placeholder="Valor US$" required className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
       <input name="taxa_cupom" type="number" step="0.001" placeholder="Cupom % a.a." className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
       <input name="data_vencimento" type="date" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+      <input name="quantidade" type="number" step="0.0001" placeholder="Qtd. papéis" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+      <input name="valor_face" type="number" step="0.01" placeholder="Valor de face" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
       <input name="conta_code" placeholder="Conta do Plano de Contas (opcional)" className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-2" />
 
       <button

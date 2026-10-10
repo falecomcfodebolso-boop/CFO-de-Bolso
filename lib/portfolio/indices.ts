@@ -12,6 +12,10 @@ export type Ativo = {
   pais_risco?: string | null;
   estrutura?: string | null;
   moeda?: string | null;
+  /** Quantidade de papéis/cotas detidos (ex: nº de notes, nº de cotas) — junto com `valor_face`, dá o principal total pra cruzar com a contabilidade. */
+  quantidade?: number | null;
+  /** Valor de face unitário de cada papel (ex: US$ 1.000,00 por nota). */
+  valor_face?: number | null;
 };
 
 export function totalCarteira(ativos: Ativo[]) {

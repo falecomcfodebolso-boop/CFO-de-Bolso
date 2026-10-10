@@ -22,6 +22,10 @@ export async function createAtivoAction(
   const taxa_cupom = taxaRaw ? parseFloat(taxaRaw.replace(",", ".")) / 100 : null;
   const data_vencimento = String(formData.get("data_vencimento") || "").trim() || null;
   const conta_code = String(formData.get("conta_code") || "").trim() || null;
+  const quantidadeRaw = String(formData.get("quantidade") || "").trim();
+  const quantidade = quantidadeRaw ? parseFloat(quantidadeRaw.replace(",", ".")) : null;
+  const valorFaceRaw = String(formData.get("valor_face") || "").trim();
+  const valor_face = valorFaceRaw ? parseFloat(valorFaceRaw.replace(",", ".")) : null;
 
   if (!nome || !valor_atual) return { error: "Informe ao menos o nome e o valor do ativo." };
 
@@ -34,6 +38,8 @@ export async function createAtivoAction(
     taxa_cupom,
     data_vencimento,
     conta_code,
+    quantidade,
+    valor_face,
   });
 
   if (error) return { error: error.message };
@@ -53,4 +59,37 @@ export async function deleteAtivoAction(formData: FormData) {
 
   revalidatePath("/carteira");
   revalidatePath("/vencimentos");
+}
+
+/**
+ * Atualiza a quantidade de papéis e/ou o valor de face unitário de um
+ * ativo já cadastrado — usado na edição inline da tabela "Todos os
+ * ativos", pra permitir preencher esses dois campos nos papéis já
+ * importados (que hoje não têm esses valores) sem precisar recadastrar
+ * o ativo do zero. Cada campo é salvo por um mini-formulário próprio na
+ * tabela, então só atualiza o(s) campo(s) que realmente vieram no
+ * formulário — não zera o outro campo quando só um deles é editado.
+ */
+export async function updateAtivoDetalhesAction(formData: FormData) {
+  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
+  if (!canWrite(currentMembership.role)) return;
+
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  const updates: { quantidade?: number | null; valor_face?: number | null } = {};
+
+  if (formData.has("quantidade")) {
+    const quantidadeRaw = String(formData.get("quantidade") || "").trim();
+    updates.quantidade = quantidadeRaw ? parseFloat(quantidadeRaw.replace(",", ".")) : null;
+  }
+  if (formData.has("valor_face")) {
+    const valorFaceRaw = String(formData.get("valor_face") || "").trim();
+    updates.valor_face = valorFaceRaw ? parseFloat(valorFaceRaw.replace(",", ".")) : null;
+  }
+  if (Object.keys(updates).length === 0) return;
+
+  await supabase.from("ativos").update(updates).eq("org_id", currentOrgId).eq("id", id);
+
+  revalidatePath("/carteira");
 }
