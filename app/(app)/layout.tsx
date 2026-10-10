@@ -20,34 +20,47 @@ import {
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { logoutAction, switchOrgAction } from "../(auth)/actions";
-import { NavLinks, type NavItem } from "./nav-links";
+import { NavLinks, type NavEntry, type NavItem } from "./nav-links";
 
 const ICON_CLASS = "h-3 w-3";
 
-function montarNav(ehBrasilReais: boolean, temVariasEmpresas: boolean): NavItem[] {
-  const nav: NavItem[] = [
-    { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className={ICON_CLASS} /> },
-    { href: "/diario", label: "Diário", icon: <BookOpenCheck className={ICON_CLASS} /> },
-    { href: "/importar", label: "Importar", icon: <Upload className={ICON_CLASS} /> },
+/**
+ * Itens de uso diário ficam soltos na barra (Dashboard, Diário, Importar); o resto entra em
+ * dois grupos (dropdown) — Relatórios e Carteira — pra não estourar a largura e quebrar linha
+ * (eram 14 itens soltos antes). CFO de Bolso e Configurações ficam soltos no fim, de propósito.
+ */
+function montarNav(ehBrasilReais: boolean, temVariasEmpresas: boolean): NavEntry[] {
+  const relatorios: NavItem[] = [
     { href: "/plano-de-contas", label: "Plano de Contas", icon: <ListTree className={ICON_CLASS} /> },
     { href: "/razoes", label: "Razões", icon: <ScrollText className={ICON_CLASS} /> },
     { href: "/balancete", label: "Balancete", icon: <Scale className={ICON_CLASS} /> },
     { href: "/demonstracoes", label: "Demonstrações", icon: <FileBarChart className={ICON_CLASS} /> },
+  ];
+  if (ehBrasilReais) {
+    relatorios.push({ href: "/obrigacoes-fiscais", label: "Obrigações Fiscais", icon: <Landmark className={ICON_CLASS} /> });
+  }
+  if (temVariasEmpresas) {
+    relatorios.push({ href: "/participacoes", label: "Participações", icon: <Network className={ICON_CLASS} /> });
+    relatorios.push({ href: "/consolidado", label: "Consolidado", icon: <Layers className={ICON_CLASS} /> });
+  }
+
+  const carteira: NavItem[] = [
     { href: "/carteira", label: "Carteira", icon: <LineChart className={ICON_CLASS} /> },
     { href: "/dividas", label: "Dívidas", icon: <CreditCard className={ICON_CLASS} /> },
     { href: "/ajustes", label: "Ajustes", icon: <Scale3D className={ICON_CLASS} /> },
     { href: "/vencimentos", label: "Vencimentos", icon: <BellRing className={ICON_CLASS} /> },
     { href: "/previsao-caixa", label: "Previsão de Pagamentos", icon: <CalendarClock className={ICON_CLASS} /> },
   ];
-  if (ehBrasilReais) {
-    nav.push({ href: "/obrigacoes-fiscais", label: "Obrigações Fiscais", icon: <Landmark className={ICON_CLASS} /> });
-  }
-  if (temVariasEmpresas) {
-    nav.push({ href: "/participacoes", label: "Participações", icon: <Network className={ICON_CLASS} /> });
-    nav.push({ href: "/consolidado", label: "Consolidado", icon: <Layers className={ICON_CLASS} /> });
-  }
-  nav.push({ href: "/cfo-bolso", label: "CFO de Bolso", icon: <MessageCircle className={ICON_CLASS} /> });
-  nav.push({ href: "/configuracoes", label: "Configurações", icon: <Settings className={ICON_CLASS} /> });
+
+  const nav: NavEntry[] = [
+    { type: "link", href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className={ICON_CLASS} /> },
+    { type: "link", href: "/diario", label: "Diário", icon: <BookOpenCheck className={ICON_CLASS} /> },
+    { type: "link", href: "/importar", label: "Importar", icon: <Upload className={ICON_CLASS} /> },
+    { type: "group", label: "Relatórios", icon: <ScrollText className={ICON_CLASS} />, items: relatorios },
+    { type: "group", label: "Carteira", icon: <LineChart className={ICON_CLASS} />, items: carteira },
+    { type: "link", href: "/cfo-bolso", label: "CFO de Bolso", icon: <MessageCircle className={ICON_CLASS} /> },
+    { type: "link", href: "/configuracoes", label: "Configurações", icon: <Settings className={ICON_CLASS} /> },
+  ];
   return nav;
 }
 
