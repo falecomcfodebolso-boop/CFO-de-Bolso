@@ -19,12 +19,16 @@ export async function createContaAction(
   const name = String(formData.get("name") || "").trim();
   const natureza = String(formData.get("natureza") || "");
   const parentCode = String(formData.get("parent_code") || "").trim() || null;
+  // Só relevante pra natureza ATIVO (ex.: subconta de um papel de renda fixa
+  // recém-cadastrado) — se o vencimento passar de 12 meses, a conta já nasce
+  // classificada como Ativo Não Circulante (ver lib/accounting/classificacao.ts).
+  const dataVencimento = String(formData.get("data_vencimento") || "").trim() || null;
 
   if (!code || !name || !natureza) {
     return { error: "Preencha código, nome e natureza da conta." };
   }
 
-  const classificacao = classificarConta(natureza as Natureza, name);
+  const classificacao = classificarConta(natureza as Natureza, name, dataVencimento);
 
   const { error } = await supabase.from("plano_de_contas").insert({
     org_id: currentOrgId,

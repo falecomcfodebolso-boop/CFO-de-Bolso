@@ -85,12 +85,37 @@ function contemAlguma(texto: string, palavras: string[]) {
   return palavras.some((p) => t.includes(p));
 }
 
-export function classificarConta(natureza: Natureza, name: string): Classificacao {
+/**
+ * true se `dataVencimentoISO` (yyyy-mm-dd) vence mais de 12 meses depois de
+ * `hojeISO` — critério padrão (CPC 26/IFRS) pra separar Ativo Circulante de
+ * Não Circulante por prazo de realização. `hojeISO` é injetável só pra
+ * facilitar teste; na prática é sempre a data de hoje.
+ */
+export function vencimentoEhLongoPrazo(dataVencimentoISO: string | null | undefined, hojeISO?: string): boolean {
+  if (!dataVencimentoISO) return false;
+  const hoje = hojeISO ?? new Date().toISOString().slice(0, 10);
+  const [y, m, d] = hoje.split("-").map(Number);
+  const cutoff = new Date(Date.UTC(y, m - 1, d));
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() + 1);
+  const cutoffISO = cutoff.toISOString().slice(0, 10);
+  return dataVencimentoISO > cutoffISO;
+}
+
+/**
+ * `dataVencimentoISO` é opcional e só é usado pra natureza ATIVO: quando
+ * informado e o vencimento passa de 12 meses da data de hoje, a conta já
+ * nasce classificada como Ativo Não Circulante (longo prazo), mesmo que o
+ * nome não bata com as palavras-chave de PALAVRAS_NAO_CIRCULANTE_ATIVO
+ * (que cobrem imobilizado/intangível, não papéis de renda fixa com
+ * vencimento distante — ver app/(app)/ajustes e a reclassificação feita
+ * em 2026-10 pra toda a carteira existente).
+ */
+export function classificarConta(natureza: Natureza, name: string, dataVencimentoISO?: string | null): Classificacao {
   const nome = name || "";
 
   if (natureza === "ATIVO") {
     const isCaixa = contemAlguma(nome, PALAVRAS_CAIXA);
-    const naoCirculante = contemAlguma(nome, PALAVRAS_NAO_CIRCULANTE_ATIVO);
+    const naoCirculante = contemAlguma(nome, PALAVRAS_NAO_CIRCULANTE_ATIVO) || vencimentoEhLongoPrazo(dataVencimentoISO);
     return {
       circulante: !naoCirculante,
       is_caixa: isCaixa,

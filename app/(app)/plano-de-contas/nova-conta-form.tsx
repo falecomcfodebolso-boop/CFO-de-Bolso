@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useEffect } from "react";
+import { useActionState, useRef, useState, useEffect } from "react";
 import { createContaAction, type ActionState } from "./actions";
 
 const NATUREZAS = ["ATIVO", "PASSIVO", "PL", "RECEITA", "DESPESA", "CONTROLE"];
@@ -11,9 +11,13 @@ export function NovaContaForm() {
     null
   );
   const formRef = useRef<HTMLFormElement>(null);
+  const [natureza, setNatureza] = useState("");
 
   useEffect(() => {
-    if (!pending && !state?.error) formRef.current?.reset();
+    if (!pending && !state?.error) {
+      formRef.current?.reset();
+      setNatureza("");
+    }
   }, [pending, state]);
 
   return (
@@ -30,7 +34,13 @@ export function NovaContaForm() {
         required
         className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
       />
-      <select name="natureza" required className="rounded-md border border-slate-300 px-3 py-2 text-sm">
+      <select
+        name="natureza"
+        required
+        value={natureza}
+        onChange={(e) => setNatureza(e.target.value)}
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+      >
         <option value="">Natureza</option>
         {NATUREZAS.map((n) => (
           <option key={n} value={n}>
@@ -45,6 +55,19 @@ export function NovaContaForm() {
       >
         {pending ? "Adicionando..." : "Adicionar conta"}
       </button>
+      {natureza === "ATIVO" && (
+        <div className="sm:col-span-5">
+          <label className="block text-xs text-slate-500 mb-1">
+            Vencimento do papel (opcional — se vencer em mais de 12 meses, a conta já nasce
+            classificada como Ativo Não Circulante / longo prazo)
+          </label>
+          <input
+            type="date"
+            name="data_vencimento"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+      )}
       {state?.error && (
         <p className="sm:col-span-5 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
           {state.error}
