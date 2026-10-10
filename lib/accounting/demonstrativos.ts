@@ -17,15 +17,27 @@ export type MovimentoClassificado = {
   valor: number;
   valor_saldo: number;
   eh_abertura: boolean;
+  eh_encerramento: boolean;
 };
 
-/** Todos os movimentos da organização até `ate` (inclusive), opcionalmente a partir de `desde`. */
+/**
+ * Todos os movimentos da organização até `ate` (inclusive), opcionalmente a partir de `desde`.
+ *
+ * Lançamentos de ENCERRAMENTO (eh_encerramento = true — zeram Receita/Despesa no fim do
+ * exercício e transferem o líquido pra conta de PL "Resultado do Exercício") são sempre
+ * ignorados quando a consulta é por um PERÍODO (`desde` informado): DRE e DMPL precisam
+ * mostrar o resultado real do período, não o lançamento que zera as contas pro período
+ * seguinte. Já uma consulta "desde sempre até uma data" (`desde` omitido — usada pelo
+ * Balanço, Carteira, Dashboard) precisa enxergar o encerramento normalmente, porque é
+ * exatamente ele que zera a Receita/Despesa acumulada a partir do exercício seguinte.
+ */
 async function getMovimentos(supabase: SupabaseClient, orgId: string, ate: string, desde?: string) {
   let query = supabase.from("v_movimento_contas").select("*").eq("org_id", orgId).lte("data", ate);
   if (desde) query = query.gte("data", desde);
   const { data, error } = await query.returns<MovimentoClassificado[]>();
   if (error) throw error;
-  return data ?? [];
+  const movs = data ?? [];
+  return desde ? movs.filter((m) => !m.eh_encerramento) : movs;
 }
 
 function diaAnterior(dataISO: string) {
