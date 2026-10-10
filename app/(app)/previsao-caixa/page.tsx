@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { requireOrgContext } from "@/lib/org";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import {
@@ -16,6 +17,50 @@ function fmtMesLabel(mes: string): string {
   const [y, m] = mes.split("-").map(Number);
   const data = new Date(Date.UTC(y, m - 1, 1));
   return data.toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/** "jan/26" — abreviado, pra caber como cabeçalho de coluna na matriz ativo x mês. */
+function fmtMesCurto(mes: string): string {
+  const [y, m] = mes.split("-").map(Number);
+  const data = new Date(Date.UTC(y, m - 1, 1));
+  return data.toLocaleDateString("pt-BR", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(".", "");
+}
+
+type LinhaMatrizAtivo = {
+  ativoId: string;
+  nome: string;
+  cupons: Record<string, number>;
+  principal: Record<string, number>;
+};
+
+/** Monta a matriz Ativo x Mês (cada ativo vira duas linhas: Cupom/Juros e Principal), com os 12
+ *  meses de calendário a partir do mês atual — mesmo quando um mês não tem pagamento nenhum, a
+ *  coluna aparece em branco em vez de sumir, pra manter a grade sempre com 12 colunas. */
+function montarMatrizAtivoMes(
+  pagamentos: ReturnType<typeof gerarPrevisaoPagamentos>,
+  hojeISO: string
+): { meses: string[]; linhas: LinhaMatrizAtivo[] } {
+  const [y, m] = hojeISO.split("-").map(Number);
+  const meses: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const data = new Date(Date.UTC(y, m - 1 + i, 1));
+    meses.push(`${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const porAtivo = new Map<string, LinhaMatrizAtivo>();
+  for (const p of pagamentos) {
+    const mesKey = p.data.slice(0, 7);
+    if (!meses.includes(mesKey)) continue;
+    if (!porAtivo.has(p.ativoId)) {
+      porAtivo.set(p.ativoId, { ativoId: p.ativoId, nome: p.nome, cupons: {}, principal: {} });
+    }
+    const linha = porAtivo.get(p.ativoId)!;
+    if (p.valorCupom != null) linha.cupons[mesKey] = (linha.cupons[mesKey] ?? 0) + p.valorCupom;
+    if (p.valorPrincipal != null) linha.principal[mesKey] = (linha.principal[mesKey] ?? 0) + p.valorPrincipal;
+  }
+
+  const linhas = [...porAtivo.values()].sort((a, b) => a.nome.localeCompare(b.nome));
+  return { meses, linhas };
 }
 
 export default async function PrevisaoCaixaPage() {
@@ -38,6 +83,7 @@ export default async function PrevisaoCaixaPage() {
   const pagamentos = gerarPrevisaoPagamentos((ativos ?? []) as AtivoProjecao[], hojeISO, horizonteISO);
   const resumo = resumoPorMes(pagamentos);
   const totalGeral = resumo.reduce((acc, r) => acc + r.total, 0);
+  const matriz = montarMatrizAtivoMes(pagamentos, hojeISO);
 
   const pendentesPeriodicidade = (ativos ?? []).filter(
     (a) => a.categoria_acruo === "periodico" && !a.periodicidade_cupom
@@ -109,6 +155,60 @@ export default async function PrevisaoCaixaPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100">
+          <h2 className="text-sm font-medium text-slate-900">Ativo x mês</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Cada título em duas linhas (cupom/juros e principal), uma coluna por mês dos próximos 12 meses.
+          </p>
+        </div>
+        {matriz.linhas.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-slate-400">Nenhum pagamento previsto nos próximos 12 meses.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="text-sm border-collapse">
+              <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                <tr>
+                  <th className="text-left px-4 py-2 sticky left-0 bg-slate-50 whitespace-nowrap">Ativo</th>
+                  {matriz.meses.map((mes) => (
+                    <th key={mes} className="text-right px-3 py-2 whitespace-nowrap capitalize">
+                      {fmtMesCurto(mes)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {matriz.linhas.map((linha) => (
+                  <Fragment key={linha.ativoId}>
+                    <tr className="hover:bg-slate-50">
+                      <td className="px-4 py-1.5 sticky left-0 bg-white whitespace-nowrap text-slate-800">
+                        {linha.nome}
+                        <span className="block text-xs text-slate-400 font-normal">Cupom/Juros</span>
+                      </td>
+                      {matriz.meses.map((mes) => (
+                        <td key={mes} className="px-3 py-1.5 text-right text-slate-700 whitespace-nowrap">
+                          {linha.cupons[mes] ? fmtMoney(linha.cupons[mes], currency) : ""}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50 border-b border-slate-100">
+                      <td className="px-4 py-1.5 sticky left-0 bg-white whitespace-nowrap text-slate-500 text-xs">
+                        Principal
+                      </td>
+                      {matriz.meses.map((mes) => (
+                        <td key={mes} className="px-3 py-1.5 text-right text-blue-700 font-medium whitespace-nowrap">
+                          {linha.principal[mes] ? fmtMoney(linha.principal[mes], currency) : ""}
+                        </td>
+                      ))}
+                    </tr>
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
