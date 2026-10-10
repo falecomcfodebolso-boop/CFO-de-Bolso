@@ -57,7 +57,7 @@ export type PagamentoPrevisto = {
   observacao: string | null;
 };
 
-const MESES_POR_PERIODO: Record<PeriodicidadeCupom, number> = {
+export const MESES_POR_PERIODO: Record<PeriodicidadeCupom, number> = {
   mensal: 1,
   trimestral: 3,
   semestral: 6,
@@ -71,7 +71,10 @@ export const PERIODICIDADE_LABEL: Record<PeriodicidadeCupom, string> = {
   anual: "Anual",
 };
 
-function addMeses(iso: string, meses: number): string {
+/** Exportada também pra app/(app)/ajustes/actions.ts, que usa o mesmo passo de meses pra
+ *  avançar data_pagamento_anterior automaticamente quando um ajuste é lançado (ver
+ *  avancarDataPagamentoAnteriorAposAjuste). */
+export function addMeses(iso: string, meses: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   const data = new Date(Date.UTC(y, m - 1 + meses, d));
   return data.toISOString().slice(0, 10);

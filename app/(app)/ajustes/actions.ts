@@ -4,6 +4,8 @@ import { requireOrgContext, canWrite } from "@/lib/org";
 import { revalidatePath } from "next/cache";
 import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { calcularAcruoInterno, type AtivoAcruo } from "@/lib/accounting/acruo";
+import { MESES_POR_PERIODO, addMeses, type PeriodicidadeCupom } from "@/lib/accounting/projecao-pagamentos";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ActionState = { error?: string; aviso?: string } | null;
 
@@ -25,6 +27,48 @@ function revalidarTelasContabeis() {
   revalidatePath("/razoes");
   revalidatePath("/demonstracoes/dre");
   revalidatePath("/consolidado");
+}
+
+/**
+ * Depois de confirmar uma apuração (Lançar no Diário, ou mesmo quando o valor do banco já bate e
+ * nenhum lançamento é gerado), avança `data_pagamento_anterior` de cada Ativo do grupo para a
+ * data de cupom mais recente que já tenha passado, de acordo com `periodicidade_cupom`.
+ *
+ * Sem isso, um Ativo registrado com a data de um cupom antigo ficava "congelado" ali pra sempre —
+ * o cálculo interno (30/360) do mês seguinte continuava contando dias a partir do cupom errado,
+ * superestimando o acruo (foi o que aconteceu com BB e Goldman Sachs: meio ano de atraso).
+ * Só mexe em Ativos com `periodicidade_cupom` cadastrada — sem ela, não tem como saber quando o
+ * próximo cupom ocorre, então a data fica como está (mesmo comportamento de antes).
+ */
+async function avancarDataPagamentoAnteriorAposAjuste(
+  supabase: SupabaseClient,
+  orgId: string,
+  nomeGrupo: string,
+  dataBase: string
+) {
+  const { data: ativosDoGrupo } = await supabase
+    .from("ativos")
+    .select("id, data_pagamento_anterior, periodicidade_cupom")
+    .eq("org_id", orgId)
+    .eq("grupo_acruo_nome", nomeGrupo)
+    .not("periodicidade_cupom", "is", null)
+    .not("data_pagamento_anterior", "is", null);
+
+  for (const a of ativosDoGrupo ?? []) {
+    const meses = MESES_POR_PERIODO[a.periodicidade_cupom as PeriodicidadeCupom];
+    if (!meses) continue;
+    let cursor = a.data_pagamento_anterior as string;
+    let avancou = false;
+    for (let guard = 0; guard < 60; guard++) {
+      const proximo = addMeses(cursor, meses);
+      if (proximo > dataBase) break;
+      cursor = proximo;
+      avancou = true;
+    }
+    if (avancou) {
+      await supabase.from("ativos").update({ data_pagamento_anterior: cursor }).eq("id", a.id).eq("org_id", orgId);
+    }
+  }
 }
 
 /**
@@ -202,6 +246,8 @@ export async function lancarAjusteAction(_prev: ActionState, formData: FormData)
     .eq("org_id", currentOrgId)
     .eq("id", id);
   if (updateError) return { error: updateError.message };
+
+  await avancarDataPagamentoAnteriorAposAjuste(supabase, currentOrgId, ajuste.nome_grupo, ajuste.data_base);
 
   revalidarTelasContabeis();
 
