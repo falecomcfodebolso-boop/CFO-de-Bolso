@@ -327,14 +327,26 @@ export async function getBalanco(supabase: SupabaseClient, orgId: string, data: 
 
   const capitalEReservas = somar(contasPl);
 
-  // O resultado do período corrente ainda não foi "fechado" contra o PL
-  // (não há lançamento de apuração/encerramento) — por isso é somado ao
-  // PL aqui, como linha própria, para o Balanço fechar com o Ativo.
-  const resultadoDoExercicio = movs.reduce((acc, m) => {
-    if (m.natureza === "RECEITA") return acc + Number(m.valor_saldo);
-    if (m.natureza === "DESPESA") return acc - Number(m.valor_saldo);
-    return acc;
-  }, 0);
+  // Receita/Despesa ainda não fechada contra o PL dentro do próprio
+  // exercício em curso (lançamentos de encerramento, quando existem,
+  // zeram isso a partir do exercício seguinte — ver eh_encerramento em
+  // getMovimentos) — por isso é somado ao PL aqui, como linha própria,
+  // para o Balanço fechar com o Ativo.
+  // arredondarCentavos no final é necessário: sem ele, quando o resultado
+  // "deveria" ser exatamente zero (ex.: período sem nenhum lançamento de
+  // Receita/Despesa), a soma de ponto flutuante pode sobrar um resíduo
+  // minúsculo (ex.: 1e-13) em vez de 0 exato — o que não aparece no valor
+  // formatado em dinheiro, mas quebra a Variação % (AH%) da Tabela
+  // Comparativa, que trata "anterior === 0" como divisão indefinida: um
+  // denominador quase-zero (mas não exatamente zero) gera uma
+  // porcentagem astronômica em vez de "—".
+  const resultadoDoExercicio = arredondarCentavos(
+    movs.reduce((acc, m) => {
+      if (m.natureza === "RECEITA") return acc + Number(m.valor_saldo);
+      if (m.natureza === "DESPESA") return acc - Number(m.valor_saldo);
+      return acc;
+    }, 0)
+  );
 
   const patrimonioLiquido = capitalEReservas + resultadoDoExercicio;
   const passivoMaisPl = passivoTotal + patrimonioLiquido;

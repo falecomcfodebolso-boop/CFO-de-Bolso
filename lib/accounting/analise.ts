@@ -42,14 +42,23 @@ export type Variacao = { absoluta: number; pct: number | null };
 
 /**
  * Variação entre o valor atual e o anterior. `pct` é null quando o valor
- * anterior é zero (ou não existe) — nesse caso a variação percentual não
- * é matematicamente definida ("de zero para qualquer valor" não é uma
- * porcentagem válida), então a UI deve mostrar "n/d" em vez de um número.
+ * anterior é (praticamente) zero (ou não existe) — nesse caso a variação
+ * percentual não é matematicamente definida ("de zero para qualquer
+ * valor" não é uma porcentagem válida), então a UI deve mostrar "n/d" em
+ * vez de um número.
+ *
+ * "Praticamente zero" (< meio centavo) e não só "=== 0" de propósito:
+ * valores que deveriam ser exatamente zero (ex.: resultado de um período
+ * sem nenhum lançamento de Receita/Despesa) às vezes chegam aqui com um
+ * resíduo de ponto flutuante minúsculo (ex.: 1e-13) por causa de somas
+ * intermediárias — invisível no valor formatado em dinheiro, mas que faz
+ * `absoluta / Math.abs(valorAnterior)` virar um número astronômico em vez
+ * de ficar indefinido.
  */
 export function calcVariacao(valor: number, valorAnterior: number | null | undefined): Variacao | null {
   if (valorAnterior == null) return null;
   const absoluta = valor - valorAnterior;
-  const pct = valorAnterior !== 0 ? absoluta / Math.abs(valorAnterior) : null;
+  const pct = Math.abs(valorAnterior) >= 0.005 ? absoluta / Math.abs(valorAnterior) : null;
   return { absoluta, pct };
 }
 
