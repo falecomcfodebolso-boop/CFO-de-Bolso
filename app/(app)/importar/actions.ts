@@ -80,6 +80,23 @@ function nomesProvavelmenteMesmoTitulo(nomeAtivo: string, nomeProposta: string):
 }
 
 /**
+ * Compara um identificador lido do PDF de custódia (sempre o "Security
+ * Identifier", ou seja, o CUSIP de 9 caracteres — ver parse-holdings.ts)
+ * com um ISIN/CUSIP já cadastrado no Ativo. Quando o cadastro guarda o
+ * ISIN completo (2 letras de país + 9 caracteres de CUSIP + 1 dígito
+ * verificador, ex: "USP22835AB13"), o CUSIP sozinho ("P22835AB1") não bate
+ * por igualdade direta — por isso também verifica se o identificador
+ * aparece embutido no ISIN, na posição em que o CUSIP sempre fica.
+ */
+function cusipOuIsinBate(valorCadastrado: string, identificadorExtrato: string): boolean {
+  if (valorCadastrado === identificadorExtrato) return true;
+  if (valorCadastrado.length === 12 && identificadorExtrato.length === 9) {
+    return valorCadastrado.slice(2, 11) === identificadorExtrato;
+  }
+  return false;
+}
+
+/**
  * Filtra da lista de propostas de novos ativos (lidas da seção "Portfolio
  * Holdings" do PDF) qualquer título que já bate com um Ativo existente na
  * organização — por ISIN/CUSIP (quando cadastrado) ou, na falta dele
@@ -100,7 +117,7 @@ function filtrarPropostasJaCadastradas(
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (isins.includes(p.identificador)) return true;
+      if (isins.some((isin) => cusipOuIsinBate(isin, p.identificador))) return true;
       return nomesProvavelmenteMesmoTitulo(a.nome, p.nome);
     });
     if (bate) {
