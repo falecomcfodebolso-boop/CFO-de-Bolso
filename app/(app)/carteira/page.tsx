@@ -293,10 +293,14 @@ export default async function CarteiraPage({
                 <th className="text-right px-4 py-2">Cupom</th>
                 <th className="text-right px-4 py-2">Vencimento</th>
                 <th className="text-right px-4 py-2">Prazo</th>
-                <th className="text-right px-4 py-2">Qtd. papéis</th>
-                <th className="text-right px-4 py-2">Valor de face</th>
-                <th className="text-right px-4 py-2" title="Quantidade × Valor de face — pra cruzar com o saldo contábil">
-                  Principal (qtd × face)
+                <th className="text-right px-4 py-2" title="Quantidade de papéis/notas, conforme a boleta de compra — informativo">
+                  Qtd. papéis (boleta)
+                </th>
+                <th className="text-right px-4 py-2" title="Valor de face TOTAL da posição (não por papel) — já é o principal, pra cruzar com o saldo contábil">
+                  Valor de face
+                </th>
+                <th className="text-right px-4 py-2" title="= Valor de face (o valor de face já é o total da posição; a quantidade de papéis é só informativa)">
+                  Principal (= valor de face)
                 </th>
               </tr>
             </thead>
@@ -373,9 +377,7 @@ export default async function CarteiraPage({
                       )}
                     </td>
                     <td className="px-4 py-2 text-right text-slate-500">
-                      {a.quantidade != null && a.valor_face != null
-                        ? fmtMoney(Number(a.quantidade) * Number(a.valor_face), currency)
-                        : "—"}
+                      {a.valor_face != null ? fmtMoney(Number(a.valor_face), currency) : "—"}
                     </td>
                   </tr>
                 );
