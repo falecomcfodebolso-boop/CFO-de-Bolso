@@ -280,24 +280,25 @@ export default async function AjustesPage({
                     </div>
                   )}
                   {temNaoReportados && (
-                    <div className="col-span-2 sm:col-span-4 flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 mt-0.5">
+                    <div className="col-span-2 sm:col-span-4 flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5 mt-0.5">
                       <span>
-                        {itensNaoReportados.length} papel(éis) marcado(s) como não reportado(s) pelo banco neste
-                        fechamento — estimativa 30/360 de {fmtMoney(subtotalNaoReportado)}, fora da conta
-                        &ldquo;comparável&rdquo; e da diferença acima (ver nota abaixo).
+                        {itensNaoReportados.length} papel(éis) marcado(s) em vermelho abaixo como não reportado(s)
+                        pelo banco neste fechamento — estimativa 30/360 de {fmtMoney(subtotalNaoReportado)}, fora
+                        da conta &ldquo;comparável&rdquo; e da diferença acima (ver nota abaixo).
                       </span>
                     </div>
                   )}
                 </div>
                 {temNaoReportados && (
-                  <div className="px-3 py-2 border-b border-slate-200 bg-white text-xs text-slate-500">
+                  <div className="px-3 py-2 border-b border-red-200 bg-red-50 text-xs text-red-700">
                     &ldquo;Calculado (interno, comparável)&rdquo; e &ldquo;todos os papéis&rdquo; aparecem separados porque
-                    alguns papéis (hoje: notas fixed-to-floating ainda no período de taxa fixa) têm acruo interno
-                    estimado pela taxa de cupom cadastrada, mas o banco/custodiante não reporta juros acruado pra
-                    eles no extrato enquanto não chegam na data de reset pra taxa flutuante. Incluí-los na
-                    comparação contra &ldquo;Informado pelo banco&rdquo; infla a diferença por um motivo que não é
-                    erro de lançamento — por isso a diferença acima usa só o valor &ldquo;comparável&rdquo;, e o
-                    valor &ldquo;todos os papéis&rdquo; fica só como referência do acruo total estimado.
+                    os papéis destacados em vermelho na tabela abaixo (hoje: notas fixed-to-floating ainda no
+                    período de taxa fixa) têm acruo interno estimado pela taxa de cupom cadastrada, mas o
+                    banco/custodiante não reporta juros acruado pra eles no extrato enquanto não chegam na data de
+                    reset pra taxa flutuante. Incluí-los na comparação contra &ldquo;Informado pelo banco&rdquo;
+                    infla a diferença por um motivo que não é erro de lançamento — por isso a diferença acima usa
+                    só o valor &ldquo;comparável&rdquo;, e o valor &ldquo;todos os papéis&rdquo; fica só como
+                    referência do acruo total estimado.
                   </div>
                 )}
                 <table className="w-full text-sm">
@@ -322,22 +323,29 @@ export default async function AjustesPage({
                           ? (i.taxa_referencia_atual ?? 0) + (i.spread_taxa ?? 0)
                           : i.taxa_cupom;
                       return (
-                        <tr key={i.id} className="border-t border-slate-100">
+                        <tr
+                          key={i.id}
+                          className={`border-t ${
+                            i.acruo_nao_reportado_banco
+                              ? "border-red-100 bg-red-50/60 text-red-800"
+                              : "border-slate-100"
+                          }`}
+                        >
                           <td className="px-3 py-2">{i.nome}</td>
-                          <td className="px-3 py-2 text-slate-500">
+                          <td className={`px-3 py-2 ${i.acruo_nao_reportado_banco ? "text-red-600" : "text-slate-500"}`}>
                             {i.categoria_acruo ? CATEGORIA_ACRUO_LABEL[i.categoria_acruo] : "—"}
                           </td>
                           <td className="px-3 py-2 text-right">{i.valor_face != null ? fmtMoney(i.valor_face) : "—"}</td>
                           <td className="px-3 py-2 text-right">
                             {taxaEfetiva != null ? `${(taxaEfetiva * 100).toFixed(3)}%` : "—"}
                             {i.tipo_taxa === "flutuante" && (
-                              <span className="text-xs text-slate-400">
+                              <span className={`text-xs ${i.acruo_nao_reportado_banco ? "text-red-500" : "text-slate-400"}`}>
                                 {" "}
                                 ({i.indice_referencia}+{((i.spread_taxa ?? 0) * 100).toFixed(3)}%)
                               </span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-right text-slate-500">
+                          <td className={`px-3 py-2 text-right ${i.acruo_nao_reportado_banco ? "text-red-600" : "text-slate-500"}`}>
                             {i.categoria_acruo === "periodico"
                               ? i.data_pagamento_anterior
                                 ? fmtDate(i.data_pagamento_anterior)
@@ -352,8 +360,12 @@ export default async function AjustesPage({
                           <td className="px-3 py-2 text-right font-medium">
                             {i.valorCalc != null ? fmtMoney(i.valorCalc) : "— (usa extrato)"}
                           </td>
-                          <td className="px-3 py-2 text-slate-400 text-xs">
-                            {i.pendente_custodiante ? "Pending no custodiante" : ""}
+                          <td className={`px-3 py-2 text-xs font-medium ${i.acruo_nao_reportado_banco ? "text-red-700" : "text-slate-400"}`}>
+                            {i.acruo_nao_reportado_banco
+                              ? "Não reportado pelo banco (fora do comparável)"
+                              : i.pendente_custodiante
+                                ? "Pending no custodiante"
+                                : ""}
                           </td>
                         </tr>
                       );
