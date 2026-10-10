@@ -16,6 +16,7 @@ export type MovimentoClassificado = {
   tipo: "D" | "C";
   valor: number;
   valor_saldo: number;
+  eh_abertura: boolean;
 };
 
 /** Todos os movimentos da organização até `ate` (inclusive), opcionalmente a partir de `desde`. */
@@ -416,6 +417,17 @@ export async function getDFC(supabase: SupabaseClient, orgId: string, inicio: st
   };
 
   for (const linhas of porLancamento.values()) {
+    // Lançamentos de "saldo de abertura" (importação em massa de saldos
+    // iniciais) misturam, nas mesmas linhas, o saldo inicial de Caixa com
+    // os saldos iniciais de todos os outros ativos/PL — não é uma
+    // movimentação de caixa do período, é a fotografia do dia zero. Se
+    // não forem ignorados aqui, o saldo inicial de Caixa seria rateado
+    // entre as contrapartidas como se fosse Atividade Operacional/
+    // Investimento real, gerando valores sem sentido econômico. Esse
+    // saldo de Caixa já é considerado corretamente em saldoInicialCaixa,
+    // acima, que soma os saldos de Caixa até o dia anterior ao período.
+    if (linhas[0]?.eh_abertura) continue;
+
     const linhasCaixa = linhas.filter((l) => l.is_caixa);
     if (linhasCaixa.length === 0) continue;
 
