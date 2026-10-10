@@ -42,7 +42,7 @@ export default async function AjustesPage({
     supabase
       .from("ativos")
       .select(
-        "id, nome, valor_face, taxa_cupom, categoria_acruo, tipo_taxa, spread_taxa, taxa_referencia_atual, indice_referencia, data_pagamento_anterior, data_inicio_acruo, pendente_custodiante, conta_acruo_code, conta_receita_code, grupo_acruo_nome"
+        "id, nome, valor_face, taxa_cupom, categoria_acruo, tipo_taxa, spread_taxa, taxa_referencia_atual, indice_referencia, data_pagamento_anterior, data_inicio_acruo, pendente_custodiante, acruo_nao_reportado_banco, conta_acruo_code, conta_receita_code, grupo_acruo_nome"
       )
       .eq("org_id", currentOrgId)
       .not("grupo_acruo_nome", "is", null)
@@ -201,6 +201,15 @@ export default async function AjustesPage({
             const temPendentes = itensPendentes.length > 0;
             const subtotalPendente = itensPendentes.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
             const subtotalConfirmado = itensConfirmados.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+            // Alguns papéis (hoje, notas fixed-to-floating ainda no período de taxa fixa) têm
+            // acruo interno estimado mas não entram no valor que o banco reporta no extrato
+            // naquele mês — comparar o total "todos os papéis" contra o banco infla a diferença
+            // por um motivo que não é erro. "Comparável" exclui esses papéis da conta, e é o
+            // valor usado em "Diferença (calculado vs. banco)" abaixo.
+            const itensNaoReportados = g.itens.filter((i) => i.acruo_nao_reportado_banco);
+            const temNaoReportados = itensNaoReportados.length > 0;
+            const subtotalNaoReportado = itensNaoReportados.reduce((acc, i) => acc + (i.valorCalc ?? 0), 0);
+            const subtotalComparavel = subtotal - subtotalNaoReportado;
             const saldoContabilAtual = somarSaldo(saldos, g.contaAcruo);
             // Prioriza a apuração registrada exatamente na data de referência escolhida; na
             // falta dela, usa a mais recente registrada em ou antes dessa data (ajustes já vêm
@@ -208,12 +217,13 @@ export default async function AjustesPage({
             const ajustesGrupo = ajustes.filter((a) => a.nome_grupo === nomeGrupo);
             const ultimoAjuste =
               ajustesGrupo.find((a) => a.data_base === dataRef) ?? ajustesGrupo.find((a) => a.data_base <= dataRef) ?? null;
-            // Compara o total calculado (confirmados + pending) contra o valor informado pelo
+            // Compara o total calculado "comparável" (confirmados + pending, excluindo os papéis
+            // marcados como não reportados pelo banco) contra o valor informado pelo
             // banco/custodiante — as posições "pending receipt" entram na conta com a estimativa
             // interna 30/360, já que ainda não têm valor próprio reportado pelo custodiante.
             const diferencaCalcBanco =
               ultimoAjuste != null
-                ? Math.round((subtotal - ultimoAjuste.valor_reportado_banco) * 100) / 100
+                ? Math.round((subtotalComparavel - ultimoAjuste.valor_reportado_banco) * 100) / 100
                 : null;
             const bate = diferencaCalcBanco != null && Math.abs(diferencaCalcBanco) < 0.01;
             return (
@@ -230,11 +240,16 @@ export default async function AjustesPage({
                     <div className="text-sm font-medium text-slate-700">{fmtMoney(saldoContabilAtual)}</div>
                   </div>
                   <div>
-                    <div className="text-[11px] uppercase text-slate-400">Calculado (interno, 30/360)</div>
-                    <div className="text-sm font-medium text-slate-700">{fmtMoney(subtotal)}</div>
+                    <div className="text-[11px] uppercase text-slate-400">Calculado (interno, comparável)</div>
+                    <div className="text-sm font-medium text-slate-700">{fmtMoney(subtotalComparavel)}</div>
                     {temPendentes && (
                       <div className="text-[11px] text-slate-400">
-                        {fmtMoney(subtotalConfirmado)} confirmados + {fmtMoney(subtotalPendente)} pending
+                        {fmtMoney(subtotalConfirmado - subtotalNaoReportado)} confirmados + {fmtMoney(subtotalPendente)} pending
+                      </div>
+                    )}
+                    {temNaoReportados && (
+                      <div className="text-[11px] text-slate-400">
+                        todos os papéis: {fmtMoney(subtotal)}
                       </div>
                     )}
                   </div>
@@ -264,7 +279,27 @@ export default async function AjustesPage({
                       </span>
                     </div>
                   )}
+                  {temNaoReportados && (
+                    <div className="col-span-2 sm:col-span-4 flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 mt-0.5">
+                      <span>
+                        {itensNaoReportados.length} papel(éis) marcado(s) como não reportado(s) pelo banco neste
+                        fechamento — estimativa 30/360 de {fmtMoney(subtotalNaoReportado)}, fora da conta
+                        &ldquo;comparável&rdquo; e da diferença acima (ver nota abaixo).
+                      </span>
+                    </div>
+                  )}
                 </div>
+                {temNaoReportados && (
+                  <div className="px-3 py-2 border-b border-slate-200 bg-white text-xs text-slate-500">
+                    &ldquo;Calculado (interno, comparável)&rdquo; e &ldquo;todos os papéis&rdquo; aparecem separados porque
+                    alguns papéis (hoje: notas fixed-to-floating ainda no período de taxa fixa) têm acruo interno
+                    estimado pela taxa de cupom cadastrada, mas o banco/custodiante não reporta juros acruado pra
+                    eles no extrato enquanto não chegam na data de reset pra taxa flutuante. Incluí-los na
+                    comparação contra &ldquo;Informado pelo banco&rdquo; infla a diferença por um motivo que não é
+                    erro de lançamento — por isso a diferença acima usa só o valor &ldquo;comparável&rdquo;, e o
+                    valor &ldquo;todos os papéis&rdquo; fica só como referência do acruo total estimado.
+                  </div>
+                )}
                 <table className="w-full text-sm">
                   <thead className="text-slate-500 text-xs uppercase">
                     <tr>

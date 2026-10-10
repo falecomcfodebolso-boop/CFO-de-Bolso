@@ -24,6 +24,11 @@ export type AtivoAcruo = {
   data_pagamento_anterior: string | null; // ISO yyyy-mm-dd
   data_inicio_acruo: string | null; // ISO yyyy-mm-dd
   pendente_custodiante: boolean | null;
+  // Papel cujo acruo interno (30/360) não tem contrapartida no valor informado
+  // pelo banco/custodiante naquele mês (ex.: fixed-to-floating ainda no período
+  // fixo, sem juros acruado reportado no extrato). Setado manualmente — ver
+  // migração 0026 e app/(app)/ajustes/page.tsx.
+  acruo_nao_reportado_banco: boolean | null;
   conta_acruo_code: string | null;
   conta_receita_code: string | null;
   grupo_acruo_nome: string | null;
