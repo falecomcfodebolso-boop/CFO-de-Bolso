@@ -7,6 +7,15 @@ function fmtPct(v: number | null, casas = 1) {
   return `${(v * 100).toFixed(casas)}%`;
 }
 
+// Classes fixas (Tailwind não permite montar "pl-N" dinamicamente a partir
+// de uma variável) — índice = nível de indentação.
+const INDENT_CLASSES = ["", "pl-8", "pl-12", "pl-16"];
+
+function indentClass(l: { indent?: boolean; indentLevel?: number }): string {
+  const nivel = l.indentLevel ?? (l.indent ? 1 : 0);
+  return INDENT_CLASSES[Math.min(nivel, INDENT_CLASSES.length - 1)];
+}
+
 /**
  * Tabela genérica usada em todas as demonstrações (DRE, Balanço, DFC,
  * DMPL) para mostrar, lado a lado: o valor do período atual, sua análise
@@ -69,9 +78,9 @@ export function TabelaComparativa({
               return (
                 <tr key={l.key ?? `${l.label}-${i}`} className={l.destaque ? "bg-slate-50" : ""}>
                   <td
-                    className={`px-4 py-2.5 ${l.indent ? "pl-8 text-slate-500" : "text-slate-800"} ${
-                      negrito ? "font-medium" : ""
-                    } ${l.destaque ? "text-slate-900" : ""}`}
+                    className={`px-4 py-2.5 ${indentClass(l)} ${
+                      (l.indentLevel ?? (l.indent ? 1 : 0)) > 0 && !negrito ? "text-slate-500" : "text-slate-800"
+                    } ${negrito ? "font-medium" : ""} ${l.destaque ? "text-slate-900" : ""}`}
                   >
                     {l.href ? (
                       <Link href={l.href} className="hover:underline">

@@ -14,6 +14,14 @@ export type LinhaAnalise = {
   valor: number;
   valorAnterior?: number | null;
   indent?: boolean;
+  /**
+   * Nível de indentação (0 = sem indentação, 1, 2, ...) — pra demonstrações
+   * com mais de um nível de hierarquia (ex: Balanço com subtotal de "conta
+   * mãe" entre o total do bloco e as contas-filha). Tem prioridade sobre
+   * `indent` quando os dois são passados; `indent: true` sozinho continua
+   * equivalendo a `indentLevel: 1`, pra não quebrar quem já usa só `indent`.
+   */
+  indentLevel?: number;
   subtotal?: boolean;
   destaque?: boolean;
   /** Pula a coluna de AV nessa linha (ex: linha de resultado que já é a soma de outras). */

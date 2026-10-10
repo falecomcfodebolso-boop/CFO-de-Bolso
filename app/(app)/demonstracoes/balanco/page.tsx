@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
-import { getBalanco, type ContaSaldo } from "@/lib/accounting/demonstrativos";
+import { getBalanco, type GrupoContas, type ContaSaldo } from "@/lib/accounting/demonstrativos";
 import { dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
 import { fmtMoney, fmtDate, fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
@@ -11,21 +11,56 @@ function hoje() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Envolve uma lista flat de contas (ex: Patrimônio Líquido, que não tem
+ * subgrupos reais) em "grupos" de uma conta só, pra poder reaproveitar
+ * `linhasDoBloco` sem gerar linhas de subtotal redundantes.
+ */
+function comoGruposFlat(contas: ContaSaldo[]): GrupoContas[] {
+  return contas.map((c) => ({ code: c.code, name: c.name, subtotal: c.saldo, contas: [c] }));
+}
+
+/**
+ * Monta as linhas de um bloco do Balanço (ex: "Ativo Circulante") a partir
+ * das contas já agrupadas por "conta mãe" (ver `agrupar` em
+ * lib/accounting/demonstrativos.ts). Quando um grupo tem mais de uma
+ * conta-filha, mostra uma linha de subtotal pro grupo (nível de indentação
+ * 1) antes das contas-filha (nível 2) — grupos com uma única conta pulam
+ * a linha de subtotal redundante e mostram a conta direto no nível 1.
+ */
 function linhasDoBloco(
   titulo: string,
-  contas: ContaSaldo[],
+  grupos: GrupoContas[],
   total: number,
-  contasAnt: ContaSaldo[],
+  gruposAnt: GrupoContas[],
   totalAnt: number | null
 ): LinhaAnalise[] {
-  const antPorCodigo = new Map(contasAnt.map((c) => [c.code, c]));
-  const linhas: LinhaAnalise[] = contas.map((c) => ({
-    key: c.code,
-    label: `${c.code} — ${c.name}`,
-    valor: c.saldo,
-    valorAnterior: antPorCodigo.get(c.code)?.saldo ?? null,
-    indent: true,
-  }));
+  const grupoAntPorCodigo = new Map(gruposAnt.map((g) => [g.code, g]));
+  const contaAntPorCodigo = new Map(gruposAnt.flatMap((g) => g.contas.map((c) => [c.code, c])));
+
+  const linhas: LinhaAnalise[] = [];
+  for (const g of grupos) {
+    const temSubtotalProprio = g.contas.length > 1;
+    if (temSubtotalProprio) {
+      linhas.push({
+        key: `grupo-${g.code}`,
+        label: `${g.code} — ${g.name}`,
+        valor: g.subtotal,
+        valorAnterior: grupoAntPorCodigo.get(g.code)?.subtotal ?? null,
+        indentLevel: 1,
+        subtotal: true,
+      });
+    }
+    for (const c of g.contas) {
+      linhas.push({
+        key: c.code,
+        label: `${c.code} — ${c.name}`,
+        valor: c.saldo,
+        valorAnterior: contaAntPorCodigo.get(c.code)?.saldo ?? null,
+        indentLevel: temSubtotalProprio ? 2 : 1,
+      });
+    }
+  }
   linhas.push({ key: `${titulo}-total`, label: `Total ${titulo}`, valor: total, valorAnterior: totalAnt, subtotal: true });
   return linhas;
 }
@@ -61,16 +96,16 @@ export default async function BalancoPage({
   const linhasAtivo: LinhaAnalise[] = [
     ...linhasDoBloco(
       "Ativo Circulante",
-      b.contasAtivoCirculante,
+      b.gruposAtivoCirculante,
       b.ativoCirculante,
-      bAnt?.contasAtivoCirculante ?? [],
+      bAnt?.gruposAtivoCirculante ?? [],
       bAnt?.ativoCirculante ?? null
     ),
     ...linhasDoBloco(
       "Ativo Não Circulante",
-      b.contasAtivoNaoCirculante,
+      b.gruposAtivoNaoCirculante,
       b.ativoNaoCirculante,
-      bAnt?.contasAtivoNaoCirculante ?? [],
+      bAnt?.gruposAtivoNaoCirculante ?? [],
       bAnt?.ativoNaoCirculante ?? null
     ),
     { key: "ativo-total", label: "= ATIVO TOTAL", valor: b.ativoTotal, valorAnterior: bAnt?.ativoTotal, destaque: true },
@@ -79,19 +114,25 @@ export default async function BalancoPage({
   const linhasPassivoPl: LinhaAnalise[] = [
     ...linhasDoBloco(
       "Passivo Circulante",
-      b.contasPassivoCirculante,
+      b.gruposPassivoCirculante,
       b.passivoCirculante,
-      bAnt?.contasPassivoCirculante ?? [],
+      bAnt?.gruposPassivoCirculante ?? [],
       bAnt?.passivoCirculante ?? null
     ),
     ...linhasDoBloco(
       "Passivo Não Circulante",
-      b.contasPassivoNaoCirculante,
+      b.gruposPassivoNaoCirculante,
       b.passivoNaoCirculante,
-      bAnt?.contasPassivoNaoCirculante ?? [],
+      bAnt?.gruposPassivoNaoCirculante ?? [],
       bAnt?.passivoNaoCirculante ?? null
     ),
-    ...linhasDoBloco("Patrimônio Líquido", b.contasPl, b.capitalEReservas, bAnt?.contasPl ?? [], bAnt?.capitalEReservas ?? null),
+    ...linhasDoBloco(
+      "Patrimônio Líquido",
+      comoGruposFlat(b.contasPl),
+      b.capitalEReservas,
+      comoGruposFlat(bAnt?.contasPl ?? []),
+      bAnt?.capitalEReservas ?? null
+    ),
     {
       key: "resultado-exercicio",
       label: "Resultado do Exercício (ainda não fechado)",
