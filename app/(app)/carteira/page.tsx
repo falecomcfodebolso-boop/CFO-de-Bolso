@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Upload } from "lucide-react";
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovoAtivoForm } from "./novo-ativo-form";
-import { deleteAtivoAction, updateAtivoDetalhesAction } from "./actions";
+import { updateAtivoDetalhesAction } from "./actions";
 import { AnaliseCarteira } from "./analise-carteira";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import {
@@ -298,7 +298,6 @@ export default async function CarteiraPage({
                 <th className="text-right px-4 py-2" title="Quantidade × Valor de face — pra cruzar com o saldo contábil">
                   Principal (qtd × face)
                 </th>
-                {podeEscrever && <th></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -378,14 +377,6 @@ export default async function CarteiraPage({
                         ? fmtMoney(Number(a.quantidade) * Number(a.valor_face), currency)
                         : "—"}
                     </td>
-                    {podeEscrever && (
-                      <td className="px-4 py-2 text-right">
-                        <form action={deleteAtivoAction}>
-                          <input type="hidden" name="id" value={a.id} />
-                          <button className="text-slate-400 hover:text-red-600 text-xs">remover</button>
-                        </form>
-                      </td>
-                    )}
                   </tr>
                 );
               })}
