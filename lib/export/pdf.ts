@@ -284,9 +284,13 @@ export function desenharLinhasAnalise(
     orgName: string;
     periodo: string;
     comparar: boolean;
+    /** Cabeçalho da coluna de valor do período atual (ex: a data de referência, em dd/mm/aaaa). Padrão: "Valor". */
+    labelAtual?: string;
+    /** Cabeçalho da coluna de valor do período de comparação (ex: a data anterior, em dd/mm/aaaa). Padrão: "Período ant.". */
+    labelAnterior?: string;
   }
 ) {
-  const { titulo, linhas, baseAV, baseAVAnterior, currency, orgName, periodo, comparar } = opts;
+  const { titulo, linhas, baseAV, baseAVAnterior, currency, orgName, periodo, comparar, labelAtual, labelAnterior } = opts;
   cabecalho(doc, titulo, orgName, periodo);
 
   const largLabel = comparar ? 200 : 380;
@@ -296,16 +300,16 @@ export function desenharLinhasAnalise(
   const header: Coluna[] = comparar
     ? [
         { texto: "Conta", largura: largLabel },
-        { texto: "Valor", largura: largNum, align: "right" },
+        { texto: labelAtual ?? "Valor", largura: largNum, align: "right" },
         { texto: "AV %", largura: largPct, align: "right" },
-        { texto: "Período ant.", largura: largNum, align: "right" },
+        { texto: labelAnterior ?? "Período ant.", largura: largNum, align: "right" },
         { texto: "AV % ant.", largura: largPct, align: "right" },
         { texto: "Variação", largura: largNum, align: "right" },
         { texto: "AH %", largura: largPct, align: "right" },
       ]
     : [
         { texto: "Conta", largura: largLabel },
-        { texto: "Valor", largura: largNum, align: "right" },
+        { texto: labelAtual ?? "Valor", largura: largNum, align: "right" },
         { texto: "AV %", largura: largPct, align: "right" },
       ];
   linhaColunas(doc, header, { bold: true });
@@ -353,6 +357,8 @@ export async function buildLinhasPdf(opts: {
   orgName: string;
   periodo: string;
   comparar: boolean;
+  labelAtual?: string;
+  labelAnterior?: string;
 }): Promise<Buffer> {
   const { doc, done } = novoDocumentoPaisagem();
   desenharLinhasAnalise(doc, opts);
@@ -362,7 +368,7 @@ export async function buildLinhasPdf(opts: {
 
 export async function buildRelatorioLinhasPdf(
   secoes: { titulo: string; linhas: LinhaAnalise[]; baseAV: number; baseAVAnterior: number }[],
-  comum: { currency: string; orgName: string; periodo: string; comparar: boolean }
+  comum: { currency: string; orgName: string; periodo: string; comparar: boolean; labelAtual?: string; labelAnterior?: string }
 ): Promise<Buffer> {
   const { doc, done } = novoDocumentoPaisagem();
   secoes.forEach((s, i) => {

@@ -5,7 +5,7 @@ import { montarLinhasDfc } from "@/lib/accounting/linhas-demonstracoes";
 import { resolverPeriodoComAnterior } from "@/lib/export/periodo";
 import { buildLinhasSheet, workbookToBuffer } from "@/lib/export/excel";
 import { buildLinhasPdf } from "@/lib/export/pdf";
-import { fmtDate } from "@/lib/format";
+import { fmtDateNumerica } from "@/lib/format";
 import ExcelJS from "exceljs";
 
 export const runtime = "nodejs";
@@ -25,8 +25,10 @@ export async function GET(req: NextRequest) {
 
   const { linhas, baseAV, baseAVAnterior } = montarLinhasDfc(dfc, dfcAnt);
   const periodo = comparar
-    ? `${fmtDate(inicio)} a ${fmtDate(fim)} (comparado a ${fmtDate(inicioAnt)} a ${fmtDate(fimAnt)})`
-    : `${fmtDate(inicio)} a ${fmtDate(fim)}`;
+    ? `${fmtDateNumerica(inicio)} a ${fmtDateNumerica(fim)} (comparado a ${fmtDateNumerica(inicioAnt)} a ${fmtDateNumerica(fimAnt)})`
+    : `${fmtDateNumerica(inicio)} a ${fmtDateNumerica(fim)}`;
+  const labelAtual = `${fmtDateNumerica(inicio)} – ${fmtDateNumerica(fim)}`;
+  const labelAnterior = `${fmtDateNumerica(inicioAnt)} – ${fmtDateNumerica(fimAnt)}`;
 
   if (formato === "pdf") {
     const buffer = await buildLinhasPdf({
@@ -38,6 +40,8 @@ export async function GET(req: NextRequest) {
       orgName,
       periodo,
       comparar,
+      labelAtual,
+      labelAnterior,
     });
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
@@ -57,6 +61,8 @@ export async function GET(req: NextRequest) {
     orgName,
     periodo,
     comparar,
+    labelAtual,
+    labelAnterior,
   });
   const buffer = await workbookToBuffer(wb);
   return new NextResponse(new Uint8Array(buffer), {

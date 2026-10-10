@@ -5,7 +5,7 @@ import { montarLinhasDmpl } from "@/lib/accounting/linhas-demonstracoes";
 import { resolverPeriodoComAnterior } from "@/lib/export/periodo";
 import { buildLinhasSheet, workbookToBuffer } from "@/lib/export/excel";
 import { buildRelatorioLinhasPdf } from "@/lib/export/pdf";
-import { fmtDate } from "@/lib/format";
+import { fmtDateNumerica } from "@/lib/format";
 import ExcelJS from "exceljs";
 
 export const runtime = "nodejs";
@@ -25,8 +25,10 @@ export async function GET(req: NextRequest) {
 
   const { linhasResumo, linhasContas } = montarLinhasDmpl(dmpl, dmplAnt);
   const periodo = comparar
-    ? `${fmtDate(inicio)} a ${fmtDate(fim)} (comparado a ${fmtDate(inicioAnt)} a ${fmtDate(fimAnt)})`
-    : `${fmtDate(inicio)} a ${fmtDate(fim)}`;
+    ? `${fmtDateNumerica(inicio)} a ${fmtDateNumerica(fim)} (comparado a ${fmtDateNumerica(inicioAnt)} a ${fmtDateNumerica(fimAnt)})`
+    : `${fmtDateNumerica(inicio)} a ${fmtDateNumerica(fim)}`;
+  const labelAtual = `${fmtDateNumerica(inicio)} – ${fmtDateNumerica(fim)}`;
+  const labelAnterior = `${fmtDateNumerica(inicioAnt)} – ${fmtDateNumerica(fimAnt)}`;
 
   const secoes = [
     { titulo: "DMPL — Mutações do Patrimônio Líquido", linhas: linhasResumo, baseAV: dmpl.saldoFinal, baseAVAnterior: dmplAnt?.saldoFinal ?? 0 },
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
   ];
 
   if (formato === "pdf") {
-    const buffer = await buildRelatorioLinhasPdf(secoes, { currency, orgName, periodo, comparar });
+    const buffer = await buildRelatorioLinhasPdf(secoes, { currency, orgName, periodo, comparar, labelAtual, labelAnterior });
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
@@ -62,6 +64,8 @@ export async function GET(req: NextRequest) {
     orgName,
     periodo,
     comparar,
+    labelAtual,
+    labelAnterior,
   });
   if (linhasContas.length > 0) {
     buildLinhasSheet(wb, {
@@ -73,6 +77,8 @@ export async function GET(req: NextRequest) {
       orgName,
       periodo,
       comparar,
+      labelAtual,
+      labelAnterior,
     });
   }
   const buffer = await workbookToBuffer(wb);

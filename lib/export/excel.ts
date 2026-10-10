@@ -158,9 +158,13 @@ export function buildLinhasSheet(
     orgName: string;
     periodo: string;
     comparar: boolean;
+    /** Cabeçalho da coluna de valor do período atual (ex: a data de referência, em dd/mm/aaaa). Padrão: "Valor". */
+    labelAtual?: string;
+    /** Cabeçalho da coluna de valor do período de comparação (ex: a data anterior, em dd/mm/aaaa). Padrão: "Período anterior". */
+    labelAnterior?: string;
   }
 ) {
-  const { titulo, sheetName, linhas, baseAV, baseAVAnterior, orgName, periodo, comparar } = opts;
+  const { titulo, sheetName, linhas, baseAV, baseAVAnterior, orgName, periodo, comparar, labelAtual, labelAnterior } = opts;
   const ws = wb.addWorksheet((sheetName ?? titulo).slice(0, 31));
   ws.columns = comparar
     ? [{ width: 42 }, { width: 16 }, { width: 10 }, { width: 16 }, { width: 10 }, { width: 16 }, { width: 10 }]
@@ -180,8 +184,8 @@ export function buildLinhasSheet(
 
   const header = ws.addRow(
     comparar
-      ? ["Conta", "Valor", "AV %", "Período anterior", "AV % ant.", "Variação", "AH %"]
-      : ["Conta", "Valor", "AV %"]
+      ? ["Conta", labelAtual ?? "Valor", "AV %", labelAnterior ?? "Período anterior", "AV % ant.", "Variação", "AH %"]
+      : ["Conta", labelAtual ?? "Valor", "AV %"]
   );
   header.font = { bold: true };
   header.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } }));

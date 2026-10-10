@@ -5,7 +5,7 @@ import { montarLinhasBalanco } from "@/lib/accounting/linhas-demonstracoes";
 import { resolverDataComAnterior } from "@/lib/export/periodo";
 import { buildLinhasSheet, workbookToBuffer } from "@/lib/export/excel";
 import { buildRelatorioLinhasPdf } from "@/lib/export/pdf";
-import { fmtDate } from "@/lib/format";
+import { fmtDateNumerica } from "@/lib/format";
 import ExcelJS from "exceljs";
 
 export const runtime = "nodejs";
@@ -24,7 +24,11 @@ export async function GET(req: NextRequest) {
   ]);
 
   const { linhasAtivo, linhasPassivoPl } = montarLinhasBalanco(b, bAnt);
-  const periodo = comparar ? `Posição em ${fmtDate(data)} (comparado a ${fmtDate(dataAnt)})` : `Posição em ${fmtDate(data)}`;
+  const periodo = comparar
+    ? `Posição em ${fmtDateNumerica(data)} (comparado a ${fmtDateNumerica(dataAnt)})`
+    : `Posição em ${fmtDateNumerica(data)}`;
+  const labelAtual = fmtDateNumerica(data);
+  const labelAnterior = fmtDateNumerica(dataAnt);
 
   if (formato === "pdf") {
     const buffer = await buildRelatorioLinhasPdf(
@@ -37,7 +41,7 @@ export async function GET(req: NextRequest) {
           baseAVAnterior: bAnt?.passivoMaisPl ?? 0,
         },
       ],
-      { currency, orgName, periodo, comparar }
+      { currency, orgName, periodo, comparar, labelAtual, labelAnterior }
     );
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
@@ -57,6 +61,8 @@ export async function GET(req: NextRequest) {
     orgName,
     periodo,
     comparar,
+    labelAtual,
+    labelAnterior,
   });
   buildLinhasSheet(wb, {
     titulo: "Balanço Patrimonial — Passivo + PL",
@@ -67,6 +73,8 @@ export async function GET(req: NextRequest) {
     orgName,
     periodo,
     comparar,
+    labelAtual,
+    labelAnterior,
   });
   const buffer = await workbookToBuffer(wb);
   return new NextResponse(new Uint8Array(buffer), {
