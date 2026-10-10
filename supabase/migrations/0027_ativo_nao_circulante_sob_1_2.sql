@@ -37,40 +37,65 @@ begin
   end loop;
 end $$;
 
-create temporary table _remap_contas_1_2 as
-select org_id, code as code_antigo,
-       case
-         when code like '1.1.3.%' then '1.2.3.' || right(code, 3)
-         when code like '1.1.4.%' then '1.2.4.' || right(code, 3)
-       end as code_novo
-from plano_de_contas
-where natureza = 'ATIVO'
-  and circulante = false
-  and (code like '1.1.3.%' or code like '1.1.4.%');
-
+-- Sem tabela temporária de propósito: colado no SQL Editor do Supabase, um
+-- script com vários statements não tem garantia de rodar tudo na mesma
+-- sessão (pooling), então uma tabela temporária criada num statement pode
+-- não existir mais no statement seguinte. Em vez disso, cada UPDATE abaixo
+-- recalcula o mapeamento na hora com a mesma subquery, lendo sempre da
+-- plano_de_contas — por isso a ordem importa: os quatro primeiros UPDATEs
+-- (que ainda dependem do código ANTIGO) têm que rodar antes do UPDATE que
+-- renomeia a própria plano_de_contas, que fica por último.
 update lancamento_linhas ll
-set conta_code = r.code_novo
-from _remap_contas_1_2 r
-where ll.org_id = r.org_id and ll.conta_code = r.code_antigo;
+set conta_code = m.code_novo
+from (
+  select org_id, code as code_antigo,
+         case when code like '1.1.3.%' then '1.2.3.' || right(code, 3)
+              when code like '1.1.4.%' then '1.2.4.' || right(code, 3) end as code_novo
+  from plano_de_contas
+  where natureza = 'ATIVO' and circulante = false and (code like '1.1.3.%' or code like '1.1.4.%')
+) m
+where ll.org_id = m.org_id and ll.conta_code = m.code_antigo;
 
 update ativos a
-set conta_code = r.code_novo
-from _remap_contas_1_2 r
-where a.org_id = r.org_id and a.conta_code = r.code_antigo;
+set conta_code = m.code_novo
+from (
+  select org_id, code as code_antigo,
+         case when code like '1.1.3.%' then '1.2.3.' || right(code, 3)
+              when code like '1.1.4.%' then '1.2.4.' || right(code, 3) end as code_novo
+  from plano_de_contas
+  where natureza = 'ATIVO' and circulante = false and (code like '1.1.3.%' or code like '1.1.4.%')
+) m
+where a.org_id = m.org_id and a.conta_code = m.code_antigo;
 
 update import_transacoes it
-set conta_sugerida = r.code_novo
-from _remap_contas_1_2 r
-where it.org_id = r.org_id and it.conta_sugerida = r.code_antigo;
+set conta_sugerida = m.code_novo
+from (
+  select org_id, code as code_antigo,
+         case when code like '1.1.3.%' then '1.2.3.' || right(code, 3)
+              when code like '1.1.4.%' then '1.2.4.' || right(code, 3) end as code_novo
+  from plano_de_contas
+  where natureza = 'ATIVO' and circulante = false and (code like '1.1.3.%' or code like '1.1.4.%')
+) m
+where it.org_id = m.org_id and it.conta_sugerida = m.code_antigo;
 
 update import_transacoes it
-set conta_confirmada = r.code_novo
-from _remap_contas_1_2 r
-where it.org_id = r.org_id and it.conta_confirmada = r.code_antigo;
+set conta_confirmada = m.code_novo
+from (
+  select org_id, code as code_antigo,
+         case when code like '1.1.3.%' then '1.2.3.' || right(code, 3)
+              when code like '1.1.4.%' then '1.2.4.' || right(code, 3) end as code_novo
+  from plano_de_contas
+  where natureza = 'ATIVO' and circulante = false and (code like '1.1.3.%' or code like '1.1.4.%')
+) m
+where it.org_id = m.org_id and it.conta_confirmada = m.code_antigo;
 
 update plano_de_contas pc
-set code = r.code_novo
-from _remap_contas_1_2 r
-where pc.org_id = r.org_id and pc.code = r.code_antigo;
-
-drop table _remap_contas_1_2;
+set code = m.code_novo
+from (
+  select org_id, code as code_antigo,
+         case when code like '1.1.3.%' then '1.2.3.' || right(code, 3)
+              when code like '1.1.4.%' then '1.2.4.' || right(code, 3) end as code_novo
+  from plano_de_contas
+  where natureza = 'ATIVO' and circulante = false and (code like '1.1.3.%' or code like '1.1.4.%')
+) m
+where pc.org_id = m.org_id and pc.code = m.code_antigo;
