@@ -2,8 +2,47 @@
 
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type ActionState = { error?: string } | null;
+export type ActionState = { error?: string; duplicata?: { numero: number } } | null;
+
+/**
+ * Checa se já existe um lançamento com a MESMA data, mesma conta de
+ * contrapartida (a conta bancária do lote) e mesmo valor — sinal forte de
+ * que essa transação do extrato já foi lançada antes (ex.: o usuário
+ * reimportou o mesmo PDF sem perceber). Nada aqui impede duas transações
+ * legítimas e coincidentes de mesma data/valor — por isso quem chama
+ * sempre permite "forçar" o lançamento mesmo com duplicata detectada.
+ */
+async function encontrarLancamentoDuplicado(
+  supabase: SupabaseClient,
+  orgId: string,
+  data: string,
+  contaCode: string,
+  valor: number
+): Promise<{ numero: number } | null> {
+  const { data: lancsNaData } = await supabase
+    .from("lancamentos")
+    .select("id, numero")
+    .eq("org_id", orgId)
+    .eq("data", data);
+  if (!lancsNaData || lancsNaData.length === 0) return null;
+
+  const idsLanc = lancsNaData.map((l) => l.id);
+  const { data: linhaIgual } = await supabase
+    .from("lancamento_linhas")
+    .select("lancamento_id")
+    .eq("org_id", orgId)
+    .eq("conta_code", contaCode)
+    .eq("valor", valor)
+    .in("lancamento_id", idsLanc)
+    .limit(1)
+    .maybeSingle();
+  if (!linhaIgual) return null;
+
+  const lanc = lancsNaData.find((l) => l.id === linhaIgual.lancamento_id);
+  return lanc ? { numero: lanc.numero } : null;
+}
 
 export async function confirmarTransacaoAction(
   _prev: ActionState,
@@ -36,6 +75,23 @@ export async function confirmarTransacaoAction(
 
   const valorAbs = Math.abs(Number(transacao.valor));
   const entrada = Number(transacao.valor) > 0;
+
+  const forcar = String(formData.get("forcar") || "") === "1";
+  if (!forcar) {
+    const duplicata = await encontrarLancamentoDuplicado(
+      supabase,
+      currentOrgId,
+      transacao.data,
+      contaBancaria,
+      valorAbs
+    );
+    if (duplicata) {
+      return {
+        error: `Já existe o lançamento #${duplicata.numero} com a mesma data, conta e valor — provável duplicata (ex.: reimportação do mesmo extrato). Marque "lançar mesmo assim" se for mesmo uma transação diferente.`,
+        duplicata,
+      };
+    }
+  }
 
   const linhas = [
     { conta_code: contaBancaria, tipo: entrada ? "D" : "C", valor: valorAbs },
@@ -102,7 +158,14 @@ export async function ignorarTransacaoAction(
   return null;
 }
 
-export type ConfirmarVariasResultado = { error?: string; confirmadas?: number };
+export type ConfirmarVariasResultado = {
+  error?: string;
+  confirmadas?: number;
+  // Transações puladas por parecerem já lançadas antes (mesma data/conta/
+  // valor) — não contam como erro, mas também não foram lançadas; quem
+  // chama decide se oferece "lançar mesmo assim" (ver `forcar` em `itens`).
+  duplicatas?: { transacaoId: string; numero: number }[];
+};
 
 /**
  * Confirma (lança de verdade no Diário) várias transações pendentes de uma
@@ -112,7 +175,7 @@ export type ConfirmarVariasResultado = { error?: string; confirmadas?: number };
  */
 export async function confirmarVariasAction(
   loteId: string,
-  itens: { transacaoId: string; contaCode: string }[]
+  itens: { transacaoId: string; contaCode: string; forcar?: boolean }[]
 ): Promise<ConfirmarVariasResultado> {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   if (!canWrite(currentMembership.role)) {
@@ -149,6 +212,7 @@ export async function confirmarVariasAction(
 
   let confirmadas = 0;
   const erros: string[] = [];
+  const duplicatas: { transacaoId: string; numero: number }[] = [];
 
   // Sequencial de propósito (não Promise.all): cada lançamento precisa de um
   // número sequencial exclusivo, e fazer isso em paralelo arriscaria duas
@@ -163,6 +227,21 @@ export async function confirmarVariasAction(
 
     const valorAbs = Math.abs(Number(transacao.valor));
     const entrada = Number(transacao.valor) > 0;
+
+    if (!item.forcar) {
+      const duplicata = await encontrarLancamentoDuplicado(
+        supabase,
+        currentOrgId,
+        transacao.data,
+        lote.conta_bancaria_code,
+        valorAbs
+      );
+      if (duplicata) {
+        duplicatas.push({ transacaoId: item.transacaoId, numero: duplicata.numero });
+        continue;
+      }
+    }
+
     const linhas = [
       { conta_code: lote.conta_bancaria_code, tipo: entrada ? "D" : "C", valor: valorAbs },
       { conta_code: item.contaCode, tipo: entrada ? "C" : "D", valor: valorAbs },
@@ -198,6 +277,18 @@ export async function confirmarVariasAction(
   revalidatePath("/diario");
   revalidatePath("/balancete");
   revalidatePath("/razoes");
+
+  if (duplicatas.length > 0) {
+    const resumoDuplicatas = `${duplicatas.length} parece(m) já lançada(s) antes (mesma data/conta/valor — ver lançamento(s) #${duplicatas
+      .map((d) => d.numero)
+      .slice(0, 5)
+      .join(", #")}${duplicatas.length > 5 ? "..." : ""}); marque "lançar mesmo assim" se forem mesmo diferentes.`;
+    return {
+      confirmadas,
+      duplicatas,
+      error: erros.length > 0 ? `${resumoDuplicatas} Falhas: ${erros.slice(0, 3).join("; ")}` : resumoDuplicatas,
+    };
+  }
 
   if (erros.length > 0) {
     return {

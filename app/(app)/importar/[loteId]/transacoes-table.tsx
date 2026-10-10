@@ -17,6 +17,12 @@ type LinhaPendente = {
   transacao: TransacaoImportada;
   contaCode: string;
   incluir: boolean;
+  // Preenchido quando uma tentativa anterior de lançar essa transação
+  // encontrou um lançamento já existente com mesma data/conta/valor — ver
+  // encontrarLancamentoDuplicado em actions.ts. `forcar` precisa ser
+  // marcado explicitamente pra essa transação ser incluída de novo.
+  duplicadaNumero?: number;
+  forcar: boolean;
 };
 
 export function TransacoesTable({
@@ -38,6 +44,7 @@ export function TransacoesTable({
       transacao: t,
       contaCode: t.conta_sugerida ?? "",
       incluir: !!t.conta_sugerida,
+      forcar: false,
     }))
   );
   const [bulkPending, startBulk] = useTransition();
@@ -59,7 +66,7 @@ export function TransacoesTable({
   function handleLancarSelecionadas() {
     const itens = linhas
       .filter((l) => l.incluir && l.contaCode)
-      .map((l) => ({ transacaoId: l.transacao.id, contaCode: l.contaCode }));
+      .map((l) => ({ transacaoId: l.transacao.id, contaCode: l.contaCode, forcar: l.forcar }));
     if (itens.length === 0) return;
     setBulkErro(null);
     setBulkOk(null);
@@ -68,8 +75,20 @@ export function TransacoesTable({
       if (resultado.error) setBulkErro(resultado.error);
       if (resultado.confirmadas) {
         setBulkOk(`${resultado.confirmadas} lançamento(s) criado(s) com sucesso.`);
-        setLinhas((prev) => prev.filter((l) => !itens.some((i) => i.transacaoId === l.transacao.id)));
       }
+      const duplicatas = resultado.duplicatas ?? [];
+      const idsDuplicados = new Set(duplicatas.map((d) => d.transacaoId));
+      // Remove da lista só quem foi de fato lançado — uma transação pulada
+      // por parecer duplicata continua pendente de revisão, agora marcada
+      // com o número do lançamento parecido, pra o usuário decidir.
+      setLinhas((prev) =>
+        prev
+          .filter((l) => !itens.some((i) => i.transacaoId === l.transacao.id) || idsDuplicados.has(l.transacao.id))
+          .map((l) => {
+            const dup = duplicatas.find((d) => d.transacaoId === l.transacao.id);
+            return dup ? { ...l, duplicadaNumero: dup.numero, incluir: false, forcar: false } : l;
+          })
+      );
     });
   }
 
@@ -207,6 +226,20 @@ function LinhaPendenteRow({
             </span>
           )}
         </div>
+        {linha.duplicadaNumero != null && (
+          <label className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 mt-1.5 max-w-md">
+            <input
+              type="checkbox"
+              checked={linha.forcar}
+              onChange={(e) => onChange({ forcar: e.target.checked, incluir: e.target.checked })}
+              className="mt-0.5"
+            />
+            <span>
+              Já existe o lançamento #{linha.duplicadaNumero} com a mesma data, conta e valor — provável
+              duplicata. Marque aqui se for mesmo uma transação diferente, pra lançar assim mesmo.
+            </span>
+          </label>
+        )}
       </td>
       <td className="px-4 py-2 text-right">
         <form action={ignoreAction}>
