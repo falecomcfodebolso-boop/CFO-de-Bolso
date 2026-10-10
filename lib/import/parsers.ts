@@ -190,6 +190,120 @@ export async function parseXLS(buffer: ArrayBuffer): Promise<TransacaoExtraida[]
 const LINHA_PDF_REGEX =
   /(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\s+(.+?)\s+(\(?-?\s?(?:R\$)?\s?-?[\d.,]*\d\)?)\s*$/;
 
+// ---------------------------------------------------------------------
+// Seção "Cash Transactions" do valuation statement do Itaú Private Bank —
+// cada lançamento é um bloco de 2-3 linhas:
+//   "DD/MM/AAAA DD/MM/AAAA Descrição..." (data de operação, data de valor,
+//   descrição — às vezes quebrada em mais de uma linha, ex.: quantidade/
+//   taxa do título que gerou o cupom: "240.000 at 0,018375")
+//   última linha do bloco termina em "<valor do lançamento> <saldo
+//   acumulado da conta>".
+//
+// Bug real encontrado em extrato de setembro/2026: a descrição de um dos
+// títulos termina em algo como "CMT 7,35 DRA 08,09,32" (data de
+// vencimento do papel, com vírgula em vez de ponto) — se a linha de
+// descrição terminasse exatamente ali, o parser "linha única" genérico
+// (LINHA_PDF_REGEX) confundia "08,09,32" com o valor do lançamento,
+// importando US$8,09 em vez dos US$4.410,00 reais (o bug ficou visível só
+// quando o caixa contábil parou de bater com o saldo do extrato).
+//
+// Por isso este parser NÃO confia no "<valor>" impresso: calcula o valor
+// de cada lançamento pela DIFERENÇA entre o saldo acumulado de um bloco e
+// o do bloco anterior, ancorado no "Opening Balance" declarado no início
+// da seção. Saldos acumulados só aparecem uma vez por bloco, sempre no
+// fim da última linha — muito mais robusto contra esse tipo de
+// mis-extração do que tentar ler o "<valor>" em si. Se o saldo calculado
+// no fim não bater com o "Closing Balance" declarado no extrato, assume
+// que algum bloco não foi reconhecido corretamente e falha alto (em vez
+// de importar uma conciliação quebrada silenciosamente).
+// ---------------------------------------------------------------------
+const CABECALHO_CASH_TRANSACTIONS_ITAU_REGEX = /Cash Transactions/i;
+const OPENING_BALANCE_ITAU_REGEX = /Opening Balance Account:\s*\S+\s+[A-Z]{3}\s+(-?[\d.,]+)\s*$/i;
+const CLOSING_BALANCE_ITAU_REGEX = /^Closing Balance\s+(-?[\d.,]+)\s*$/i;
+const INICIO_BLOCO_ITAU_CASH_REGEX = /^(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(.+)$/;
+const FIM_BLOCO_ITAU_CASH_REGEX = /^(.*?)(-?[\d,]+\.\d{2})\s+(-?[\d,]+\.\d{2})\s*$/;
+const JANELA_MAX_BLOCO_ITAU_CASH = 6;
+
+function parsePDFCashTransactionsItauPrivateBank(texto: string): TransacaoExtraida[] {
+  if (!CABECALHO_CASH_TRANSACTIONS_ITAU_REGEX.test(texto)) return [];
+  const linhas = texto
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  let saldoAnterior: number | null = null;
+  let saldoDeclaradoFechamento: number | null = null;
+  const transacoes: TransacaoExtraida[] = [];
+
+  for (let i = 0; i < linhas.length; i++) {
+    const abertura = linhas[i].match(OPENING_BALANCE_ITAU_REGEX);
+    if (abertura) {
+      saldoAnterior = parseValorFlexivel(abertura[1]);
+      continue;
+    }
+    const fechamento = linhas[i].match(CLOSING_BALANCE_ITAU_REGEX);
+    if (fechamento) {
+      saldoDeclaradoFechamento = parseValorFlexivel(fechamento[1]);
+      continue;
+    }
+    if (saldoAnterior === null) continue; // ainda não achou o "Opening Balance"
+    const inicio = linhas[i].match(INICIO_BLOCO_ITAU_CASH_REGEX);
+    if (!inicio) continue;
+
+    const dataOperacao = parseDataFlexivel(inicio[1]);
+    const descricaoPartes = [inicio[3].trim()];
+    let saldoNovo: number | null = null;
+    let j = i + 1;
+    for (; j < linhas.length && j < i + JANELA_MAX_BLOCO_ITAU_CASH; j++) {
+      const linha = linhas[j];
+      if (
+        INICIO_BLOCO_ITAU_CASH_REGEX.test(linha) ||
+        OPENING_BALANCE_ITAU_REGEX.test(linha) ||
+        CLOSING_BALANCE_ITAU_REGEX.test(linha)
+      ) {
+        break; // bloco anterior não fechou — descarta
+      }
+      const fim = linha.match(FIM_BLOCO_ITAU_CASH_REGEX);
+      if (fim) {
+        if (fim[1].trim()) descricaoPartes.push(fim[1].trim());
+        saldoNovo = parseValorFlexivel(fim[3]);
+        break;
+      }
+      descricaoPartes.push(linha);
+    }
+
+    if (saldoNovo === null || !dataOperacao) continue;
+    i = j;
+    const valor = Math.round((saldoNovo - saldoAnterior) * 100) / 100;
+    if (valor !== 0) {
+      transacoes.push({
+        data: dataOperacao,
+        descricao: descricaoPartes.filter(Boolean).join(" — ").slice(0, 300),
+        valor,
+      });
+    }
+    saldoAnterior = saldoNovo;
+  }
+
+  if (transacoes.length === 0) return [];
+
+  if (
+    saldoDeclaradoFechamento !== null &&
+    saldoAnterior !== null &&
+    Math.abs(saldoAnterior - saldoDeclaradoFechamento) >= 0.01
+  ) {
+    throw new ParseError(
+      `A soma dos lançamentos reconhecidos na seção "Cash Transactions" do extrato do Itaú Private Bank não bate com o "Closing Balance" declarado (calculado: ${saldoAnterior.toFixed(
+        2
+      )}, declarado: ${saldoDeclaradoFechamento.toFixed(
+        2
+      )}) — provavelmente algum bloco de lançamento não foi reconhecido pelo parser. Confira o extrato manualmente antes de importar.`
+    );
+  }
+
+  return transacoes;
+}
+
 // pdfjs-dist (usado por pdf-parse) detecta em runtime se está rodando num
 // browser checando a presença de DOMMatrix/ImageData/Path2D — no runtime
 // Node.js serverless da Vercel isso falha com "ReferenceError: DOMMatrix
@@ -234,6 +348,17 @@ export async function parsePDF(buffer: ArrayBuffer): Promise<TransacaoExtraida[]
       "O PDF não retornou nenhum texto — provavelmente é um extrato escaneado/fotografado, que este protótipo ainda não suporta (precisaria de OCR). Tente exportar em OFX ou CSV pelo internet banking."
     );
   }
+
+  // Formatos identificados de forma inequívoca por um cabeçalho específico
+  // (ex.: "Cash Transactions" do valuation statement do Itaú Private Bank)
+  // são tentados ANTES do parser "linha única" genérico abaixo. Motivo: o
+  // genérico casa com qualquer linha que termine em "algo parecido com um
+  // número", e em alguns extratos isso casa errado com um fragmento da
+  // própria descrição antes que o parser certo tenha a chance de rodar —
+  // foi exatamente o que aconteceu num extrato real do Itaú (ver
+  // parsePDFCashTransactionsItauPrivateBank).
+  const itauCash = parsePDFCashTransactionsItauPrivateBank(texto);
+  if (itauCash.length > 0) return itauCash;
 
   const transacoes: TransacaoExtraida[] = [];
   for (const linhaBruta of texto.split(/\r?\n/)) {
