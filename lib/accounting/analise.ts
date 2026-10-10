@@ -8,6 +8,8 @@
 //     período de comparação — mostra a evolução no tempo.
 // =====================================================================
 
+import type { GrupoContas, GrupoDmpl } from "./demonstrativos";
+
 export type LinhaAnalise = {
   key?: string;
   label: string;
@@ -68,4 +70,92 @@ export function dataComparacaoPadrao(data: string): string {
   const d = new Date(`${data}T00:00:00Z`);
   d.setUTCFullYear(d.getUTCFullYear() - 1);
   return d.toISOString().slice(0, 10);
+}
+
+// =====================================================================
+// Subtotais de "conta mãe" — usado por Balanço, DRE, DFC e DMPL para
+// mostrar um subtotal intermediário entre o total do bloco/categoria e
+// as contas-folha, quando o grupo (código truncado no último segmento)
+// tiver mais de uma conta. Ver `agruparPorContaMae` em demonstrativos.ts
+// pra como os grupos são formados.
+// =====================================================================
+
+/** Formato comum (independente da demonstração de origem) que `linhasDeGrupos` consome. */
+export type LinhaGrupoInput = {
+  code: string;
+  name: string;
+  valor: number;
+  valorAnterior?: number | null;
+  contas: { code: string; name: string; valor: number; valorAnterior?: number | null }[];
+};
+
+/** Casa `GrupoContas[]` do período atual com o equivalente do período anterior, por código (grupo e conta), pra alimentar `linhasDeGrupos`. Usado no Balanço, na DRE e na DFC. */
+export function juntarGruposComAnterior(grupos: GrupoContas[], gruposAnt: GrupoContas[]): LinhaGrupoInput[] {
+  const grupoAntPorCodigo = new Map(gruposAnt.map((g) => [g.code, g]));
+  const contaAntPorCodigo = new Map(gruposAnt.flatMap((g) => g.contas.map((c) => [c.code, c])));
+  return grupos.map((g) => ({
+    code: g.code,
+    name: g.name,
+    valor: g.subtotal,
+    valorAnterior: grupoAntPorCodigo.get(g.code)?.subtotal ?? null,
+    contas: g.contas.map((c) => ({
+      code: c.code,
+      name: c.name,
+      valor: c.saldo,
+      valorAnterior: contaAntPorCodigo.get(c.code)?.saldo ?? null,
+    })),
+  }));
+}
+
+/** Mesma ideia de `juntarGruposComAnterior`, mas pra `GrupoDmpl[]` (usa o saldo final de cada grupo/conta como "valor"). Usado na DMPL. */
+export function juntarGruposDmplComAnterior(grupos: GrupoDmpl[], gruposAnt: GrupoDmpl[]): LinhaGrupoInput[] {
+  const grupoAntPorCodigo = new Map(gruposAnt.map((g) => [g.code, g]));
+  const contaAntPorCodigo = new Map(gruposAnt.flatMap((g) => g.contas.map((c) => [c.code, c])));
+  return grupos.map((g) => ({
+    code: g.code,
+    name: g.name,
+    valor: g.saldoFinal,
+    valorAnterior: grupoAntPorCodigo.get(g.code)?.saldoFinal ?? null,
+    contas: g.contas.map((c) => ({
+      code: c.code,
+      name: c.name,
+      valor: c.saldoFinal,
+      valorAnterior: contaAntPorCodigo.get(c.code)?.saldoFinal ?? null,
+    })),
+  }));
+}
+
+/**
+ * Monta as linhas de detalhe (subtotal de grupo + contas-filha) a partir
+ * de `LinhaGrupoInput[]` já casado com o período anterior (ver
+ * `juntarGruposComAnterior`/`juntarGruposDmplComAnterior`). `nivelBase` é
+ * o nível de indentação do subtotal de grupo; as contas-filha ficam um
+ * nível abaixo quando o grupo tem mais de uma conta (senão, a conta
+ * aparece direto em `nivelBase`, sem repetir o subtotal redundante).
+ */
+export function linhasDeGrupos(grupos: LinhaGrupoInput[], nivelBase: number = 1): LinhaAnalise[] {
+  const linhas: LinhaAnalise[] = [];
+  for (const g of grupos) {
+    const temSubtotalProprio = g.contas.length > 1;
+    if (temSubtotalProprio) {
+      linhas.push({
+        key: `grupo-${g.code}`,
+        label: `${g.code} — ${g.name}`,
+        valor: g.valor,
+        valorAnterior: g.valorAnterior ?? null,
+        indentLevel: nivelBase,
+        subtotal: true,
+      });
+    }
+    for (const c of g.contas) {
+      linhas.push({
+        key: c.code,
+        label: `${c.code} — ${c.name}`,
+        valor: c.valor,
+        valorAnterior: c.valorAnterior ?? null,
+        indentLevel: temSubtotalProprio ? nivelBase + 1 : nivelBase,
+      });
+    }
+  }
+  return linhas;
 }

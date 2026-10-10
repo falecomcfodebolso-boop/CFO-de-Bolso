@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDFC } from "@/lib/accounting/demonstrativos";
-import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
+import { periodoAnterior, juntarGruposComAnterior, linhasDeGrupos, type LinhaAnalise } from "@/lib/accounting/analise";
 import { fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
@@ -45,8 +45,11 @@ export default async function DfcPage({
   const linhas: LinhaAnalise[] = [
     { label: "Saldo Inicial de Caixa", valor: dfc.saldoInicialCaixa, valorAnterior: dfcAnt?.saldoInicialCaixa, destaque: true, semAV: true },
     { label: "(+/–) Atividades Operacionais", valor: dfc.operacional, valorAnterior: dfcAnt?.operacional },
+    ...linhasDeGrupos(juntarGruposComAnterior(dfc.gruposOperacional, dfcAnt?.gruposOperacional ?? []), 1),
     { label: "(+/–) Atividades de Investimento", valor: dfc.investimento, valorAnterior: dfcAnt?.investimento },
+    ...linhasDeGrupos(juntarGruposComAnterior(dfc.gruposInvestimento, dfcAnt?.gruposInvestimento ?? []), 1),
     { label: "(+/–) Atividades de Financiamento", valor: dfc.financiamento, valorAnterior: dfcAnt?.financiamento },
+    ...linhasDeGrupos(juntarGruposComAnterior(dfc.gruposFinanciamento, dfcAnt?.gruposFinanciamento ?? []), 1),
     { label: "= Variação de Caixa no Período", valor: dfc.variacaoCaixa, valorAnterior: dfcAnt?.variacaoCaixa, subtotal: true, semAV: true },
     { label: "Saldo Final de Caixa", valor: dfc.saldoFinalCaixa, valorAnterior: dfcAnt?.saldoFinalCaixa, destaque: true, semAV: true },
   ];

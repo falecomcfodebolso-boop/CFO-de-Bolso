@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
-import { getDRE } from "@/lib/accounting/demonstrativos";
-import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
+import { getDRE, type GrupoContas } from "@/lib/accounting/demonstrativos";
+import { periodoAnterior, juntarGruposComAnterior, linhasDeGrupos, type LinhaAnalise } from "@/lib/accounting/analise";
 import { fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
@@ -11,6 +11,34 @@ function inicioDoAno() {
 }
 function hoje() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Inverte o sinal de um `GrupoContas[]` — usado pras categorias de despesa/dedução da DRE, cujas contas vêm agrupadas em valor absoluto mas são exibidas com sinal negativo (subtraindo da receita). */
+function negarGrupos(grupos: GrupoContas[]): GrupoContas[] {
+  return grupos.map((g) => ({
+    ...g,
+    subtotal: -g.subtotal,
+    contas: g.contas.map((c) => ({ ...c, saldo: -c.saldo })),
+  }));
+}
+
+/**
+ * Monta a linha de uma categoria da DRE (ex: "Receita Bruta") seguida do
+ * detalhamento por conta mãe/conta (ver `linhasDeGrupos`), indentado um
+ * nível abaixo da própria categoria.
+ */
+function linhasCategoria(
+  label: string,
+  valor: number,
+  valorAnterior: number | null | undefined,
+  grupos: GrupoContas[],
+  gruposAnt: GrupoContas[],
+  nivelCategoria: 0 | 1 = 0
+): LinhaAnalise[] {
+  return [
+    { label, valor, valorAnterior, indent: nivelCategoria === 1 },
+    ...linhasDeGrupos(juntarGruposComAnterior(grupos, gruposAnt), nivelCategoria + 1),
+  ];
 }
 
 export default async function DrePage({
@@ -36,38 +64,72 @@ export default async function DrePage({
   ]);
 
   const linhas: LinhaAnalise[] = [
-    { label: "Receita Bruta", valor: dre.receitaBruta, valorAnterior: dreAnt?.receitaBruta },
-    { label: "(–) Deduções da Receita", valor: -dre.deducoes, valorAnterior: dreAnt ? -dreAnt.deducoes : null, indent: true },
+    ...linhasCategoria("Receita Bruta", dre.receitaBruta, dreAnt?.receitaBruta, dre.gruposReceitaBruta, dreAnt?.gruposReceitaBruta ?? [], 0),
+    ...linhasCategoria(
+      "(–) Deduções da Receita",
+      -dre.deducoes,
+      dreAnt ? -dreAnt.deducoes : null,
+      negarGrupos(dre.gruposDeducoes),
+      negarGrupos(dreAnt?.gruposDeducoes ?? []),
+      1
+    ),
     { label: "= Receita Líquida", valor: dre.receitaLiquida, valorAnterior: dreAnt?.receitaLiquida, subtotal: true },
-    { label: "(–) Custos", valor: -dre.custos, valorAnterior: dreAnt ? -dreAnt.custos : null, indent: true },
+    ...linhasCategoria(
+      "(–) Custos",
+      -dre.custos,
+      dreAnt ? -dreAnt.custos : null,
+      negarGrupos(dre.gruposCustos),
+      negarGrupos(dreAnt?.gruposCustos ?? []),
+      1
+    ),
     { label: "= Lucro Bruto", valor: dre.lucroBruto, valorAnterior: dreAnt?.lucroBruto, subtotal: true },
-    {
-      label: "(–) Despesas Operacionais",
-      valor: -dre.despesasOperacionais,
-      valorAnterior: dreAnt ? -dreAnt.despesasOperacionais : null,
-      indent: true,
-    },
+    ...linhasCategoria(
+      "(–) Despesas Operacionais",
+      -dre.despesasOperacionais,
+      dreAnt ? -dreAnt.despesasOperacionais : null,
+      negarGrupos(dre.gruposDespesasOperacionais),
+      negarGrupos(dreAnt?.gruposDespesasOperacionais ?? []),
+      1
+    ),
     { label: "= Resultado Operacional", valor: dre.resultadoOperacional, valorAnterior: dreAnt?.resultadoOperacional, subtotal: true },
-    { label: "(+) Receitas Financeiras", valor: dre.receitasFinanceiras, valorAnterior: dreAnt?.receitasFinanceiras, indent: true },
-    {
-      label: "(–) Despesas Financeiras",
-      valor: -dre.despesasFinanceiras,
-      valorAnterior: dreAnt ? -dreAnt.despesasFinanceiras : null,
-      indent: true,
-    },
-    { label: "(+/–) Outras Receitas/Despesas", valor: dre.outras, valorAnterior: dreAnt?.outras, indent: true },
+    ...linhasCategoria(
+      "(+) Receitas Financeiras",
+      dre.receitasFinanceiras,
+      dreAnt?.receitasFinanceiras,
+      dre.gruposReceitasFinanceiras,
+      dreAnt?.gruposReceitasFinanceiras ?? [],
+      1
+    ),
+    ...linhasCategoria(
+      "(–) Despesas Financeiras",
+      -dre.despesasFinanceiras,
+      dreAnt ? -dreAnt.despesasFinanceiras : null,
+      negarGrupos(dre.gruposDespesasFinanceiras),
+      negarGrupos(dreAnt?.gruposDespesasFinanceiras ?? []),
+      1
+    ),
+    ...linhasCategoria(
+      "(+/–) Outras Receitas/Despesas",
+      dre.outras,
+      dreAnt?.outras,
+      dre.gruposOutras,
+      dreAnt?.gruposOutras ?? [],
+      1
+    ),
     {
       label: "= Resultado Antes dos Impostos",
       valor: dre.resultadoAntesImpostos,
       valorAnterior: dreAnt?.resultadoAntesImpostos,
       subtotal: true,
     },
-    {
-      label: "(–) Impostos sobre o Lucro",
-      valor: -dre.impostosSobreLucro,
-      valorAnterior: dreAnt ? -dreAnt.impostosSobreLucro : null,
-      indent: true,
-    },
+    ...linhasCategoria(
+      "(–) Impostos sobre o Lucro",
+      -dre.impostosSobreLucro,
+      dreAnt ? -dreAnt.impostosSobreLucro : null,
+      negarGrupos(dre.gruposImpostosSobreLucro),
+      negarGrupos(dreAnt?.gruposImpostosSobreLucro ?? []),
+      1
+    ),
     {
       label: "= Lucro/Prejuízo Líquido do Período",
       valor: dre.lucroLiquido,

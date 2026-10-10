@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
-import { getBalanco, type GrupoContas, type ContaSaldo } from "@/lib/accounting/demonstrativos";
-import { dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
+import { getBalanco, type GrupoContas } from "@/lib/accounting/demonstrativos";
+import { juntarGruposComAnterior, linhasDeGrupos, dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
 import { fmtMoney, fmtDate, fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
@@ -12,21 +12,12 @@ function hoje() {
 }
 
 /**
- * Envolve uma lista flat de contas (ex: Patrimônio Líquido, que não tem
- * subgrupos reais) em "grupos" de uma conta só, pra poder reaproveitar
- * `linhasDoBloco` sem gerar linhas de subtotal redundantes.
- */
-function comoGruposFlat(contas: ContaSaldo[]): GrupoContas[] {
-  return contas.map((c) => ({ code: c.code, name: c.name, subtotal: c.saldo, contas: [c] }));
-}
-
-/**
- * Monta as linhas de um bloco do Balanço (ex: "Ativo Circulante") a partir
- * das contas já agrupadas por "conta mãe" (ver `agrupar` em
- * lib/accounting/demonstrativos.ts). Quando um grupo tem mais de uma
- * conta-filha, mostra uma linha de subtotal pro grupo (nível de indentação
- * 1) antes das contas-filha (nível 2) — grupos com uma única conta pulam
- * a linha de subtotal redundante e mostram a conta direto no nível 1.
+ * Monta as linhas de um bloco do Balanço (ex: "Ativo Circulante" ou
+ * "Patrimônio Líquido") a partir das contas já agrupadas por "conta mãe"
+ * (ver `agruparPorContaMae` em lib/accounting/demonstrativos.ts): uma
+ * linha de subtotal por grupo (nível de indentação 1) quando o grupo tem
+ * mais de uma conta-filha (nível 2), seguida da linha de "Total" do
+ * bloco inteiro.
  */
 function linhasDoBloco(
   titulo: string,
@@ -35,32 +26,7 @@ function linhasDoBloco(
   gruposAnt: GrupoContas[],
   totalAnt: number | null
 ): LinhaAnalise[] {
-  const grupoAntPorCodigo = new Map(gruposAnt.map((g) => [g.code, g]));
-  const contaAntPorCodigo = new Map(gruposAnt.flatMap((g) => g.contas.map((c) => [c.code, c])));
-
-  const linhas: LinhaAnalise[] = [];
-  for (const g of grupos) {
-    const temSubtotalProprio = g.contas.length > 1;
-    if (temSubtotalProprio) {
-      linhas.push({
-        key: `grupo-${g.code}`,
-        label: `${g.code} — ${g.name}`,
-        valor: g.subtotal,
-        valorAnterior: grupoAntPorCodigo.get(g.code)?.subtotal ?? null,
-        indentLevel: 1,
-        subtotal: true,
-      });
-    }
-    for (const c of g.contas) {
-      linhas.push({
-        key: c.code,
-        label: `${c.code} — ${c.name}`,
-        valor: c.saldo,
-        valorAnterior: contaAntPorCodigo.get(c.code)?.saldo ?? null,
-        indentLevel: temSubtotalProprio ? 2 : 1,
-      });
-    }
-  }
+  const linhas = linhasDeGrupos(juntarGruposComAnterior(grupos, gruposAnt), 1);
   linhas.push({ key: `${titulo}-total`, label: `Total ${titulo}`, valor: total, valorAnterior: totalAnt, subtotal: true });
   return linhas;
 }
@@ -128,9 +94,9 @@ export default async function BalancoPage({
     ),
     ...linhasDoBloco(
       "Patrimônio Líquido",
-      comoGruposFlat(b.contasPl),
+      b.gruposPl,
       b.capitalEReservas,
-      comoGruposFlat(bAnt?.contasPl ?? []),
+      bAnt?.gruposPl ?? [],
       bAnt?.capitalEReservas ?? null
     ),
     {

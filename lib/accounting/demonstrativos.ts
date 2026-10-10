@@ -34,8 +34,85 @@ function diaAnterior(dataISO: string) {
 }
 
 // ---------------------------------------------------------------------
+// Agrupamento por "conta mãe" — compartilhado entre todas as demonstrações
+// (Balanço, DRE, DFC) que mostram contas-folha e se beneficiam de um
+// subtotal intermediário pra facilitar a leitura.
+// ---------------------------------------------------------------------
+
+export type ContaSaldo = { code: string; name: string; saldo: number };
+
+/**
+ * Contas-filha agrupadas sob uma "conta mãe" (ex.: "1.1.3 — Aplicações
+ * Financeiras - Banco Itaú" agrupando "1.1.3.001", "1.1.3.002", ...) — o
+ * agrupamento é inferido pelo prefixo do código (truncando o último
+ * segmento), não por `parent_code` (que hoje não é preenchido no cadastro
+ * de contas). `subtotal` é a soma dos saldos das `contas`.
+ */
+export type GrupoContas = { code: string; name: string; subtotal: number; contas: ContaSaldo[] };
+
+/** Busca o nome de cada conta do plano de contas da org, por código — usado pra "rotular" os grupos de conta-mãe inferidos por prefixo. */
+async function getNomePorCodigo(supabase: SupabaseClient, orgId: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from("plano_de_contas").select("code, name").eq("org_id", orgId);
+  if (error) throw error;
+  return new Map((data ?? []).map((c) => [c.code as string, c.name as string]));
+}
+
+/** Agrupa uma lista de contas-folha pela "conta mãe" (código sem o último segmento). */
+function agruparPorContaMae(contas: ContaSaldo[], nomePorCodigo: Map<string, string>): GrupoContas[] {
+  const porPai = new Map<string, ContaSaldo[]>();
+  for (const c of contas) {
+    const partes = c.code.split(".");
+    const paiCode = partes.length > 1 ? partes.slice(0, -1).join(".") : c.code;
+    if (!porPai.has(paiCode)) porPai.set(paiCode, []);
+    porPai.get(paiCode)!.push(c);
+  }
+  return Array.from(porPai.entries())
+    .map(([paiCode, itens]) => ({
+      code: paiCode,
+      name: nomePorCodigo.get(paiCode) ?? paiCode,
+      subtotal: arredondarCentavos(itens.reduce((acc, c) => acc + c.saldo, 0)),
+      contas: itens,
+    }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+}
+
+// ---------------------------------------------------------------------
 // DRE — Demonstração do Resultado do Exercício
 // ---------------------------------------------------------------------
+
+/** Soma `valor_saldo` por conta dentro de um grupo da DRE. `absoluto: true` pras categorias de despesa/dedução, cujo sinal já é consistente dentro do grupo (ver uso de `Math.abs` nos totais agregados abaixo). */
+function contasPorGrupoDre(movs: MovimentoClassificado[], grupo: GrupoDre, absoluto: boolean): ContaSaldo[] {
+  const porConta = new Map<string, { name: string; saldo: number }>();
+  for (const m of movs) {
+    if (m.grupo_dre !== grupo) continue;
+    const atual = porConta.get(m.conta_code) ?? { name: m.conta_name, saldo: 0 };
+    atual.saldo += Number(m.valor_saldo);
+    porConta.set(m.conta_code, atual);
+  }
+  return Array.from(porConta.entries())
+    .map(([code, c]) => ({ code, name: c.name, saldo: arredondarCentavos(absoluto ? Math.abs(c.saldo) : c.saldo) }))
+    .filter((c) => Math.abs(c.saldo) > 0.001)
+    .sort((a, b) => a.code.localeCompare(b.code));
+}
+
+/** Caso especial do grupo "outras_receitas_despesas": mistura contas de RECEITA e DESPESA — cada conta aparece com o sinal que já teria na exibição (receita positiva, despesa negativa), pra somar certinho no total "outras". */
+function contasOutrasReceitasDespesas(movs: MovimentoClassificado[]): ContaSaldo[] {
+  const porConta = new Map<string, { name: string; natureza: Natureza; saldo: number }>();
+  for (const m of movs) {
+    if (m.grupo_dre !== "outras_receitas_despesas") continue;
+    const atual = porConta.get(m.conta_code) ?? { name: m.conta_name, natureza: m.natureza, saldo: 0 };
+    atual.saldo += Number(m.valor_saldo);
+    porConta.set(m.conta_code, atual);
+  }
+  return Array.from(porConta.entries())
+    .map(([code, c]) => ({
+      code,
+      name: c.name,
+      saldo: arredondarCentavos(c.natureza === "DESPESA" ? -Math.abs(c.saldo) : c.saldo),
+    }))
+    .filter((c) => Math.abs(c.saldo) > 0.001)
+    .sort((a, b) => a.code.localeCompare(b.code));
+}
 
 export type Dre = {
   periodoInicio: string;
@@ -54,6 +131,17 @@ export type Dre = {
   impostosSobreLucro: number;
   lucroLiquido: number;
   temMovimento: boolean;
+  // Contas-folha de cada categoria, agrupadas por "conta mãe" — usado pra
+  // mostrar subtotais intermediários na DRE (ex.: detalhar quais contas
+  // compõem "Despesas Operacionais"), facilitando a leitura.
+  gruposReceitaBruta: GrupoContas[];
+  gruposDeducoes: GrupoContas[];
+  gruposCustos: GrupoContas[];
+  gruposDespesasOperacionais: GrupoContas[];
+  gruposReceitasFinanceiras: GrupoContas[];
+  gruposDespesasFinanceiras: GrupoContas[];
+  gruposOutras: GrupoContas[];
+  gruposImpostosSobreLucro: GrupoContas[];
 };
 
 export async function getDRE(
@@ -62,7 +150,10 @@ export async function getDRE(
   inicio: string,
   fim: string
 ): Promise<Dre> {
-  const movs = await getMovimentos(supabase, orgId, fim, inicio);
+  const [movs, nomePorCodigo] = await Promise.all([
+    getMovimentos(supabase, orgId, fim, inicio),
+    getNomePorCodigo(supabase, orgId),
+  ]);
 
   const somaGrupo = (grupo: GrupoDre) =>
     movs.filter((m) => m.grupo_dre === grupo).reduce((acc, m) => acc + Number(m.valor_saldo), 0);
@@ -91,6 +182,27 @@ export async function getDRE(
   const impostosSobreLucro = Math.abs(somaGrupo("impostos_sobre_lucro"));
   const lucroLiquido = resultadoAntesImpostos - impostosSobreLucro;
 
+  const gruposReceitaBruta = agruparPorContaMae(contasPorGrupoDre(movs, "receita_bruta", false), nomePorCodigo);
+  const gruposDeducoes = agruparPorContaMae(contasPorGrupoDre(movs, "deducoes", true), nomePorCodigo);
+  const gruposCustos = agruparPorContaMae(contasPorGrupoDre(movs, "custos", true), nomePorCodigo);
+  const gruposDespesasOperacionais = agruparPorContaMae(
+    contasPorGrupoDre(movs, "despesas_operacionais", true),
+    nomePorCodigo
+  );
+  const gruposReceitasFinanceiras = agruparPorContaMae(
+    contasPorGrupoDre(movs, "receitas_financeiras", false),
+    nomePorCodigo
+  );
+  const gruposDespesasFinanceiras = agruparPorContaMae(
+    contasPorGrupoDre(movs, "despesas_financeiras", true),
+    nomePorCodigo
+  );
+  const gruposOutras = agruparPorContaMae(contasOutrasReceitasDespesas(movs), nomePorCodigo);
+  const gruposImpostosSobreLucro = agruparPorContaMae(
+    contasPorGrupoDre(movs, "impostos_sobre_lucro", true),
+    nomePorCodigo
+  );
+
   return {
     periodoInicio: inicio,
     periodoFim: fim,
@@ -108,23 +220,20 @@ export async function getDRE(
     impostosSobreLucro,
     lucroLiquido,
     temMovimento: movs.some((m) => m.natureza === "RECEITA" || m.natureza === "DESPESA"),
+    gruposReceitaBruta,
+    gruposDeducoes,
+    gruposCustos,
+    gruposDespesasOperacionais,
+    gruposReceitasFinanceiras,
+    gruposDespesasFinanceiras,
+    gruposOutras,
+    gruposImpostosSobreLucro,
   };
 }
 
 // ---------------------------------------------------------------------
 // Balanço Patrimonial
 // ---------------------------------------------------------------------
-
-export type ContaSaldo = { code: string; name: string; saldo: number };
-
-/**
- * Contas-filha agrupadas sob uma "conta mãe" (ex.: "1.1.3 — Aplicações
- * Financeiras - Banco Itaú" agrupando "1.1.3.001", "1.1.3.002", ...) — o
- * agrupamento é inferido pelo prefixo do código (truncando o último
- * segmento), não por `parent_code` (que hoje não é preenchido no cadastro
- * de contas). `subtotal` é a soma dos saldos das `contas`.
- */
-export type GrupoContas = { code: string; name: string; subtotal: number; contas: ContaSaldo[] };
 
 export type Balanco = {
   data: string;
@@ -152,15 +261,14 @@ export type Balanco = {
   gruposAtivoNaoCirculante: GrupoContas[];
   gruposPassivoCirculante: GrupoContas[];
   gruposPassivoNaoCirculante: GrupoContas[];
+  gruposPl: GrupoContas[];
 };
 
 export async function getBalanco(supabase: SupabaseClient, orgId: string, data: string): Promise<Balanco> {
-  const [movs, { data: contasPlano, error: contasPlanoError }] = await Promise.all([
+  const [movs, nomePorCodigo] = await Promise.all([
     getMovimentos(supabase, orgId, data),
-    supabase.from("plano_de_contas").select("code, name").eq("org_id", orgId),
+    getNomePorCodigo(supabase, orgId),
   ]);
-  if (contasPlanoError) throw contasPlanoError;
-  const nomePorCodigo = new Map((contasPlano ?? []).map((c) => [c.code as string, c.name as string]));
 
   const porConta = new Map<string, { name: string; natureza: Natureza; circulante: boolean | null; saldo: number }>();
   for (const m of movs) {
@@ -182,35 +290,17 @@ export async function getBalanco(supabase: SupabaseClient, orgId: string, data: 
       .filter((c) => Math.abs(c.saldo) > 0.001)
       .sort((a, b) => a.code.localeCompare(b.code));
 
-  /** Agrupa uma lista de contas-folha pela "conta mãe" (código sem o último segmento). */
-  const agrupar = (contas: ContaSaldo[]): GrupoContas[] => {
-    const porPai = new Map<string, ContaSaldo[]>();
-    for (const c of contas) {
-      const partes = c.code.split(".");
-      const paiCode = partes.length > 1 ? partes.slice(0, -1).join(".") : c.code;
-      if (!porPai.has(paiCode)) porPai.set(paiCode, []);
-      porPai.get(paiCode)!.push(c);
-    }
-    return Array.from(porPai.entries())
-      .map(([paiCode, itens]) => ({
-        code: paiCode,
-        name: nomePorCodigo.get(paiCode) ?? paiCode,
-        subtotal: arredondarCentavos(itens.reduce((acc, c) => acc + c.saldo, 0)),
-        contas: itens,
-      }))
-      .sort((a, b) => a.code.localeCompare(b.code));
-  };
-
   const contasAtivoCirculante = listar("ATIVO", true);
   const contasAtivoNaoCirculante = listar("ATIVO", false);
   const contasPassivoCirculante = listar("PASSIVO", true);
   const contasPassivoNaoCirculante = listar("PASSIVO", false);
   const contasPl = listar("PL", null);
 
-  const gruposAtivoCirculante = agrupar(contasAtivoCirculante);
-  const gruposAtivoNaoCirculante = agrupar(contasAtivoNaoCirculante);
-  const gruposPassivoCirculante = agrupar(contasPassivoCirculante);
-  const gruposPassivoNaoCirculante = agrupar(contasPassivoNaoCirculante);
+  const gruposAtivoCirculante = agruparPorContaMae(contasAtivoCirculante, nomePorCodigo);
+  const gruposAtivoNaoCirculante = agruparPorContaMae(contasAtivoNaoCirculante, nomePorCodigo);
+  const gruposPassivoCirculante = agruparPorContaMae(contasPassivoCirculante, nomePorCodigo);
+  const gruposPassivoNaoCirculante = agruparPorContaMae(contasPassivoNaoCirculante, nomePorCodigo);
+  const gruposPl = agruparPorContaMae(contasPl, nomePorCodigo);
 
   const somar = (arr: ContaSaldo[]) => arr.reduce((acc, c) => acc + c.saldo, 0);
 
@@ -258,6 +348,7 @@ export async function getBalanco(supabase: SupabaseClient, orgId: string, data: 
     gruposAtivoNaoCirculante,
     gruposPassivoCirculante,
     gruposPassivoNaoCirculante,
+    gruposPl,
   };
 }
 
@@ -280,15 +371,23 @@ export type Dfc = {
   investimento: number;
   financiamento: number;
   variacaoCaixa: number;
+  // Contrapartidas de cada categoria, agrupadas por "conta mãe" — mostra
+  // quais contas compuseram, por ex., as Atividades de Investimento.
+  gruposOperacional: GrupoContas[];
+  gruposInvestimento: GrupoContas[];
+  gruposFinanciamento: GrupoContas[];
 };
 
 export async function getDFC(supabase: SupabaseClient, orgId: string, inicio: string, fim: string): Promise<Dfc> {
-  const movsAteInicio = await getMovimentos(supabase, orgId, diaAnterior(inicio));
+  const [movsAteInicio, movsPeriodo, nomePorCodigo] = await Promise.all([
+    getMovimentos(supabase, orgId, diaAnterior(inicio)),
+    getMovimentos(supabase, orgId, fim, inicio),
+    getNomePorCodigo(supabase, orgId),
+  ]);
+
   const saldoInicialCaixa = movsAteInicio
     .filter((m) => m.is_caixa)
     .reduce((acc, m) => acc + Number(m.valor_saldo), 0);
-
-  const movsPeriodo = await getMovimentos(supabase, orgId, fim, inicio);
 
   const porLancamento = new Map<string, MovimentoClassificado[]>();
   for (const m of movsPeriodo) {
@@ -300,6 +399,21 @@ export async function getDFC(supabase: SupabaseClient, orgId: string, inicio: st
   let operacional = 0;
   let investimento = 0;
   let financiamento = 0;
+
+  const porContaOperacional = new Map<string, { name: string; saldo: number }>();
+  const porContaInvestimento = new Map<string, { name: string; saldo: number }>();
+  const porContaFinanciamento = new Map<string, { name: string; saldo: number }>();
+
+  const acumular = (
+    mapa: Map<string, { name: string; saldo: number }>,
+    code: string,
+    name: string,
+    parte: number
+  ) => {
+    const atual = mapa.get(code) ?? { name, saldo: 0 };
+    atual.saldo += parte;
+    mapa.set(code, atual);
+  };
 
   for (const linhas of porLancamento.values()) {
     const linhasCaixa = linhas.filter((l) => l.is_caixa);
@@ -314,11 +428,28 @@ export async function getDFC(supabase: SupabaseClient, orgId: string, inicio: st
     for (const l of linhasOutras) {
       const peso = totalOutras > 0 ? Number(l.valor) / totalOutras : 1 / linhasOutras.length;
       const parte = cashDelta * peso;
-      if (l.grupo_dfc === "investimento") investimento += parte;
-      else if (l.grupo_dfc === "financiamento") financiamento += parte;
-      else operacional += parte;
+      if (l.grupo_dfc === "investimento") {
+        investimento += parte;
+        acumular(porContaInvestimento, l.conta_code, l.conta_name, parte);
+      } else if (l.grupo_dfc === "financiamento") {
+        financiamento += parte;
+        acumular(porContaFinanciamento, l.conta_code, l.conta_name, parte);
+      } else {
+        operacional += parte;
+        acumular(porContaOperacional, l.conta_code, l.conta_name, parte);
+      }
     }
   }
+
+  const paraContas = (mapa: Map<string, { name: string; saldo: number }>): ContaSaldo[] =>
+    Array.from(mapa.entries())
+      .map(([code, c]) => ({ code, name: c.name, saldo: arredondarCentavos(c.saldo) }))
+      .filter((c) => Math.abs(c.saldo) > 0.001)
+      .sort((a, b) => a.code.localeCompare(b.code));
+
+  const gruposOperacional = agruparPorContaMae(paraContas(porContaOperacional), nomePorCodigo);
+  const gruposInvestimento = agruparPorContaMae(paraContas(porContaInvestimento), nomePorCodigo);
+  const gruposFinanciamento = agruparPorContaMae(paraContas(porContaFinanciamento), nomePorCodigo);
 
   const variacaoCaixa = operacional + investimento + financiamento;
 
@@ -331,6 +462,9 @@ export async function getDFC(supabase: SupabaseClient, orgId: string, inicio: st
     investimento,
     financiamento,
     variacaoCaixa,
+    gruposOperacional,
+    gruposInvestimento,
+    gruposFinanciamento,
   };
 }
 
@@ -339,6 +473,36 @@ export async function getDFC(supabase: SupabaseClient, orgId: string, inicio: st
 // ---------------------------------------------------------------------
 
 export type DmplConta = { code: string; name: string; saldoInicial: number; movimento: number; saldoFinal: number };
+
+/** Mesmo agrupamento por "conta mãe" das demais demonstrações, mas pra contas de DMPL (que têm 3 colunas: saldo inicial, movimento do período e saldo final). */
+export type GrupoDmpl = {
+  code: string;
+  name: string;
+  saldoInicial: number;
+  movimento: number;
+  saldoFinal: number;
+  contas: DmplConta[];
+};
+
+function agruparDmplPorContaMae(contas: DmplConta[], nomePorCodigo: Map<string, string>): GrupoDmpl[] {
+  const porPai = new Map<string, DmplConta[]>();
+  for (const c of contas) {
+    const partes = c.code.split(".");
+    const paiCode = partes.length > 1 ? partes.slice(0, -1).join(".") : c.code;
+    if (!porPai.has(paiCode)) porPai.set(paiCode, []);
+    porPai.get(paiCode)!.push(c);
+  }
+  return Array.from(porPai.entries())
+    .map(([paiCode, itens]) => ({
+      code: paiCode,
+      name: nomePorCodigo.get(paiCode) ?? paiCode,
+      saldoInicial: arredondarCentavos(itens.reduce((acc, c) => acc + c.saldoInicial, 0)),
+      movimento: arredondarCentavos(itens.reduce((acc, c) => acc + c.movimento, 0)),
+      saldoFinal: arredondarCentavos(itens.reduce((acc, c) => acc + c.saldoFinal, 0)),
+      contas: itens,
+    }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+}
 
 export type Dmpl = {
   periodoInicio: string;
@@ -349,13 +513,17 @@ export type Dmpl = {
   resultadoPeriodo: number;
   saldoFinal: number;
   contas: DmplConta[];
+  // Mesmas contas acima, agrupadas por "conta mãe" — facilita a leitura
+  // quando há mais de uma conta de capital/reserva do mesmo grupo.
+  grupos: GrupoDmpl[];
 };
 
 export async function getDMPL(supabase: SupabaseClient, orgId: string, inicio: string, fim: string): Promise<Dmpl> {
-  const [movsAteInicio, movsPeriodo, dre] = await Promise.all([
+  const [movsAteInicio, movsPeriodo, dre, nomePorCodigo] = await Promise.all([
     getMovimentos(supabase, orgId, diaAnterior(inicio)),
     getMovimentos(supabase, orgId, fim, inicio),
     getDRE(supabase, orgId, inicio, fim),
+    getNomePorCodigo(supabase, orgId),
   ]);
 
   const saldoInicialPorConta = new Map<string, { name: string; saldo: number }>();
@@ -384,11 +552,23 @@ export async function getDMPL(supabase: SupabaseClient, orgId: string, inicio: s
     })
     .sort((a, b) => a.code.localeCompare(b.code));
 
+  const grupos = agruparDmplPorContaMae(contas, nomePorCodigo);
+
   const saldoInicial = contas.reduce((acc, c) => acc + c.saldoInicial, 0);
   const aportes = contas.reduce((acc, c) => acc + (c.movimento > 0 ? c.movimento : 0), 0);
   const distribuicoes = contas.reduce((acc, c) => acc + (c.movimento < 0 ? c.movimento : 0), 0);
   const resultadoPeriodo = dre.lucroLiquido;
   const saldoFinal = saldoInicial + aportes + distribuicoes + resultadoPeriodo;
 
-  return { periodoInicio: inicio, periodoFim: fim, saldoInicial, aportes, distribuicoes, resultadoPeriodo, saldoFinal, contas };
+  return {
+    periodoInicio: inicio,
+    periodoFim: fim,
+    saldoInicial,
+    aportes,
+    distribuicoes,
+    resultadoPeriodo,
+    saldoFinal,
+    contas,
+    grupos,
+  };
 }

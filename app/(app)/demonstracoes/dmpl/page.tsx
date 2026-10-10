@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDMPL } from "@/lib/accounting/demonstrativos";
-import { periodoAnterior, type LinhaAnalise } from "@/lib/accounting/analise";
+import { periodoAnterior, juntarGruposDmplComAnterior, linhasDeGrupos, type LinhaAnalise } from "@/lib/accounting/analise";
 import { fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
@@ -43,13 +43,10 @@ export default async function DmplPage({
     { label: "Saldo Final", valor: dmpl.saldoFinal, valorAnterior: dmplAnt?.saldoFinal, destaque: true },
   ];
 
-  const contasAntPorCodigo = new Map((dmplAnt?.contas ?? []).map((c) => [c.code, c]));
-  const linhasContas: LinhaAnalise[] = dmpl.contas.map((c) => ({
-    key: c.code,
-    label: `${c.code} — ${c.name}`,
-    valor: c.saldoFinal,
-    valorAnterior: contasAntPorCodigo.get(c.code)?.saldoFinal ?? null,
-  }));
+  const linhasContas: LinhaAnalise[] = linhasDeGrupos(
+    juntarGruposDmplComAnterior(dmpl.grupos, dmplAnt?.grupos ?? []),
+    0
+  );
 
   return (
     <div className="space-y-6">
