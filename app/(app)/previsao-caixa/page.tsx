@@ -69,40 +69,48 @@ export default async function PrevisaoCaixaPage() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium text-slate-900">Resumo por mês</h2>
           <span className="text-sm text-slate-500">
             Total 12 meses: <strong className="text-slate-900">{fmtMoney(totalGeral, currency)}</strong>
           </span>
         </div>
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-            <tr>
-              <th className="text-left px-4 py-2">Mês</th>
-              <th className="text-right px-4 py-2">Cupons/juros</th>
-              <th className="text-right px-4 py-2">Principal</th>
-              <th className="text-right px-4 py-2">Total</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
+        {resumo.length === 0 ? (
+          <div className="bg-white border border-slate-200 rounded-xl px-4 py-6 text-center text-sm text-slate-400">
+            Nenhum pagamento previsto nos próximos 12 meses.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {resumo.map((r) => (
-              <tr key={r.mes} className="hover:bg-slate-50">
-                <td className="px-4 py-2 text-slate-800 capitalize">{fmtMesLabel(r.mes)}</td>
-                <td className="px-4 py-2 text-right">{fmtMoney(r.totalCupons, currency)}</td>
-                <td className="px-4 py-2 text-right">{fmtMoney(r.totalPrincipal, currency)}</td>
-                <td className="px-4 py-2 text-right font-medium text-slate-900">{fmtMoney(r.total, currency)}</td>
-              </tr>
+              <div
+                key={r.mes}
+                className={`rounded-xl border px-4 py-3 ${
+                  r.totalPrincipal > 0
+                    ? "bg-blue-50/60 border-blue-200"
+                    : "bg-white border-slate-200"
+                }`}
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 capitalize">
+                  {fmtMesLabel(r.mes)}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{fmtMoney(r.total, currency)}</p>
+                <div className="mt-2 space-y-0.5 text-xs text-slate-500">
+                  <div className="flex justify-between">
+                    <span>Cupons/juros</span>
+                    <span>{fmtMoney(r.totalCupons, currency)}</span>
+                  </div>
+                  {r.totalPrincipal > 0 && (
+                    <div className="flex justify-between font-medium text-blue-700">
+                      <span>Principal</span>
+                      <span>{fmtMoney(r.totalPrincipal, currency)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             ))}
-            {resumo.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-4 text-center text-slate-400">
-                  Nenhum pagamento previsto nos próximos 12 meses.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
