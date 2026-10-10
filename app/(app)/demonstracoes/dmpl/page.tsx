@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDMPL } from "@/lib/accounting/demonstrativos";
-import { periodoAnterior, juntarGruposDmplComAnterior, linhasDeGrupos, type LinhaAnalise } from "@/lib/accounting/analise";
+import { montarLinhasDmpl } from "@/lib/accounting/linhas-demonstracoes";
+import { periodoAnterior } from "@/lib/accounting/analise";
 import { fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
@@ -35,18 +36,7 @@ export default async function DmplPage({
     comparar ? getDMPL(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
   ]);
 
-  const linhasResumo: LinhaAnalise[] = [
-    { label: "Saldo Inicial", valor: dmpl.saldoInicial, valorAnterior: dmplAnt?.saldoInicial },
-    { label: "(+) Aportes de Capital", valor: dmpl.aportes, valorAnterior: dmplAnt?.aportes, indent: true },
-    { label: "(–) Distribuições / Retiradas", valor: dmpl.distribuicoes, valorAnterior: dmplAnt?.distribuicoes, indent: true },
-    { label: "(+/–) Resultado do Período", valor: dmpl.resultadoPeriodo, valorAnterior: dmplAnt?.resultadoPeriodo, indent: true },
-    { label: "Saldo Final", valor: dmpl.saldoFinal, valorAnterior: dmplAnt?.saldoFinal, destaque: true },
-  ];
-
-  const linhasContas: LinhaAnalise[] = linhasDeGrupos(
-    juntarGruposDmplComAnterior(dmpl.grupos, dmplAnt?.grupos ?? []),
-    0
-  );
+  const { linhasResumo, linhasContas } = montarLinhasDmpl(dmpl, dmplAnt);
 
   return (
     <div className="space-y-6">
@@ -58,7 +48,10 @@ export default async function DmplPage({
           <h1 className="text-xl font-semibold text-slate-900 mt-1">DMPL — Mutações do Patrimônio Líquido</h1>
           <p className="text-sm text-slate-500">Como o Patrimônio Líquido mudou entre o início e o fim do período.</p>
         </div>
-        <ExportButtons hrefBase="/api/export/dmpl" query={{ inicio, fim }} />
+        <ExportButtons
+          hrefBase="/api/export/dmpl"
+          query={{ inicio, fim, comparar: comparar ? "1" : "0", inicioAnt, fimAnt }}
+        />
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">

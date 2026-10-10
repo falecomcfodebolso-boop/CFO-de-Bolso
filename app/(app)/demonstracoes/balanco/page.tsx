@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
-import { getBalanco, type GrupoContas } from "@/lib/accounting/demonstrativos";
-import { juntarGruposComAnterior, linhasDeGrupos, dataComparacaoPadrao, type LinhaAnalise } from "@/lib/accounting/analise";
+import { getBalanco } from "@/lib/accounting/demonstrativos";
+import { montarLinhasBalanco } from "@/lib/accounting/linhas-demonstracoes";
+import { dataComparacaoPadrao } from "@/lib/accounting/analise";
 import { fmtMoney, fmtDate, fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
@@ -9,26 +10,6 @@ import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/account
 
 function hoje() {
   return new Date().toISOString().slice(0, 10);
-}
-
-/**
- * Monta as linhas de um bloco do Balanço (ex: "Ativo Circulante" ou
- * "Patrimônio Líquido") a partir das contas já agrupadas por "conta mãe"
- * (ver `agruparPorContaMae` em lib/accounting/demonstrativos.ts): uma
- * linha de subtotal por grupo (nível de indentação 1) quando o grupo tem
- * mais de uma conta-filha (nível 2), seguida da linha de "Total" do
- * bloco inteiro.
- */
-function linhasDoBloco(
-  titulo: string,
-  grupos: GrupoContas[],
-  total: number,
-  gruposAnt: GrupoContas[],
-  totalAnt: number | null
-): LinhaAnalise[] {
-  const linhas = linhasDeGrupos(juntarGruposComAnterior(grupos, gruposAnt), 1);
-  linhas.push({ key: `${titulo}-total`, label: `Total ${titulo}`, valor: total, valorAnterior: totalAnt, subtotal: true });
-  return linhas;
 }
 
 export default async function BalancoPage({
@@ -59,61 +40,7 @@ export default async function BalancoPage({
 
   const fecha = Math.abs(b.diferenca) < 0.01;
 
-  const linhasAtivo: LinhaAnalise[] = [
-    ...linhasDoBloco(
-      "Ativo Circulante",
-      b.gruposAtivoCirculante,
-      b.ativoCirculante,
-      bAnt?.gruposAtivoCirculante ?? [],
-      bAnt?.ativoCirculante ?? null
-    ),
-    ...linhasDoBloco(
-      "Ativo Não Circulante",
-      b.gruposAtivoNaoCirculante,
-      b.ativoNaoCirculante,
-      bAnt?.gruposAtivoNaoCirculante ?? [],
-      bAnt?.ativoNaoCirculante ?? null
-    ),
-    { key: "ativo-total", label: "= ATIVO TOTAL", valor: b.ativoTotal, valorAnterior: bAnt?.ativoTotal, destaque: true },
-  ];
-
-  const linhasPassivoPl: LinhaAnalise[] = [
-    ...linhasDoBloco(
-      "Passivo Circulante",
-      b.gruposPassivoCirculante,
-      b.passivoCirculante,
-      bAnt?.gruposPassivoCirculante ?? [],
-      bAnt?.passivoCirculante ?? null
-    ),
-    ...linhasDoBloco(
-      "Passivo Não Circulante",
-      b.gruposPassivoNaoCirculante,
-      b.passivoNaoCirculante,
-      bAnt?.gruposPassivoNaoCirculante ?? [],
-      bAnt?.passivoNaoCirculante ?? null
-    ),
-    ...linhasDoBloco(
-      "Patrimônio Líquido",
-      b.gruposPl,
-      b.capitalEReservas,
-      bAnt?.gruposPl ?? [],
-      bAnt?.capitalEReservas ?? null
-    ),
-    {
-      key: "resultado-exercicio",
-      label: "Resultado do Exercício (ainda não fechado)",
-      valor: b.resultadoDoExercicio,
-      valorAnterior: bAnt?.resultadoDoExercicio,
-      indent: true,
-    },
-    {
-      key: "passivo-pl-total",
-      label: "= PASSIVO + PATRIMÔNIO LÍQUIDO",
-      valor: b.passivoMaisPl,
-      valorAnterior: bAnt?.passivoMaisPl,
-      destaque: true,
-    },
-  ];
+  const { linhasAtivo, linhasPassivoPl } = montarLinhasBalanco(b, bAnt);
 
   return (
     <div className="space-y-6">
@@ -125,7 +52,10 @@ export default async function BalancoPage({
           <h1 className="text-xl font-semibold text-slate-900 mt-1">Balanço Patrimonial</h1>
           <p className="text-sm text-slate-500">Posição do Ativo, Passivo e Patrimônio Líquido em uma data.</p>
         </div>
-        <ExportButtons hrefBase="/api/export/balanco" query={{ data }} />
+        <ExportButtons
+          hrefBase="/api/export/balanco"
+          query={{ data, comparar: comparar ? "1" : "0", dataAnt }}
+        />
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">

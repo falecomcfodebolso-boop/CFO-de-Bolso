@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
 import { getDFC } from "@/lib/accounting/demonstrativos";
-import { periodoAnterior, juntarGruposComAnterior, linhasDeGrupos, type LinhaAnalise } from "@/lib/accounting/analise";
+import { montarLinhasDfc } from "@/lib/accounting/linhas-demonstracoes";
+import { periodoAnterior } from "@/lib/accounting/analise";
 import { fmtDateNumerica } from "@/lib/format";
 import { ExportButtons } from "../export-buttons";
 import { TabelaComparativa } from "../tabela-comparativa";
@@ -35,24 +36,7 @@ export default async function DfcPage({
     comparar ? getDFC(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
   ]);
 
-  // Base da análise vertical da DFC: soma dos valores absolutos dos três
-  // grupos de atividades — não há uma convenção única pra "100%" num
-  // fluxo (diferente do Ativo Total no Balanço ou da Receita na DRE), por
-  // isso usamos essa base e deixamos isso explícito na legenda da tabela.
-  const baseAV = Math.abs(dfc.operacional) + Math.abs(dfc.investimento) + Math.abs(dfc.financiamento);
-  const baseAVAnt = dfcAnt ? Math.abs(dfcAnt.operacional) + Math.abs(dfcAnt.investimento) + Math.abs(dfcAnt.financiamento) : 0;
-
-  const linhas: LinhaAnalise[] = [
-    { label: "Saldo Inicial de Caixa", valor: dfc.saldoInicialCaixa, valorAnterior: dfcAnt?.saldoInicialCaixa, destaque: true, semAV: true },
-    { label: "(+/–) Atividades Operacionais", valor: dfc.operacional, valorAnterior: dfcAnt?.operacional },
-    ...linhasDeGrupos(juntarGruposComAnterior(dfc.gruposOperacional, dfcAnt?.gruposOperacional ?? []), 1),
-    { label: "(+/–) Atividades de Investimento", valor: dfc.investimento, valorAnterior: dfcAnt?.investimento },
-    ...linhasDeGrupos(juntarGruposComAnterior(dfc.gruposInvestimento, dfcAnt?.gruposInvestimento ?? []), 1),
-    { label: "(+/–) Atividades de Financiamento", valor: dfc.financiamento, valorAnterior: dfcAnt?.financiamento },
-    ...linhasDeGrupos(juntarGruposComAnterior(dfc.gruposFinanciamento, dfcAnt?.gruposFinanciamento ?? []), 1),
-    { label: "= Variação de Caixa no Período", valor: dfc.variacaoCaixa, valorAnterior: dfcAnt?.variacaoCaixa, subtotal: true, semAV: true },
-    { label: "Saldo Final de Caixa", valor: dfc.saldoFinalCaixa, valorAnterior: dfcAnt?.saldoFinalCaixa, destaque: true, semAV: true },
-  ];
+  const { linhas, baseAV, baseAVAnterior: baseAVAnt } = montarLinhasDfc(dfc, dfcAnt);
 
   return (
     <div className="space-y-6">
@@ -67,7 +51,10 @@ export default async function DfcPage({
             contrapartida no mesmo lançamento.
           </p>
         </div>
-        <ExportButtons hrefBase="/api/export/dfc" query={{ inicio, fim }} />
+        <ExportButtons
+          hrefBase="/api/export/dfc"
+          query={{ inicio, fim, comparar: comparar ? "1" : "0", inicioAnt, fimAnt }}
+        />
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
