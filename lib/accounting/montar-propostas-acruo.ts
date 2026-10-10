@@ -43,17 +43,34 @@ export type ResultadoPropostasAcruo = {
 
 type AtivoComIsin = AtivoAcruo & { id: string; isin: string | null };
 
-/** Ativo cujo ISIN (ou um dos ISINs, separados por vírgula) bate com o da linha do extrato. */
-function encontrarPorIsin(entrada: EntradaAcruoExtrato, ativos: AtivoComIsin[]): AtivoComIsin | null {
+/**
+ * Ativo cujo ISIN (ou um dos ISINs, separados por vírgula) bate com o da linha do extrato.
+ *
+ * O mesmo papel às vezes é mantido em mais de um custodiante (ex.: Petrobrás jan/31 no Itaú e
+ * na XP/Bradesco — mesmo ISIN, duas posições/contas diferentes). Quando mais de um Ativo
+ * cadastrado compartilha o ISIN, desempata pelo formato do extrato (quem está reportando): um
+ * extrato Pershing só pode estar descrevendo a posição do grupo "XP/Bradesco", e um extrato
+ * Itaú nunca descreve esse grupo. Sem esse desempate, o juro acruado de um custodiante podia
+ * cair silenciosamente na conta do outro (reconhecido com sucesso, mas no grupo errado).
+ */
+function encontrarPorIsin(
+  entrada: EntradaAcruoExtrato,
+  ativos: AtivoComIsin[],
+  formato: "itau" | "pershing"
+): AtivoComIsin | null {
   if (!entrada.isin) return null;
-  return (
-    ativos.find((a) =>
-      (a.isin ?? "")
-        .split(",")
-        .map((s) => s.trim())
-        .includes(entrada.isin as string)
-    ) ?? null
+  const candidatos = ativos.filter((a) =>
+    (a.isin ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .includes(entrada.isin as string)
   );
+  if (candidatos.length === 0) return null;
+  if (candidatos.length === 1) return candidatos[0];
+  const doCustodianteCerto = candidatos.filter((a) =>
+    formato === "pershing" ? a.grupo_acruo_nome === "XP/Bradesco" : a.grupo_acruo_nome !== "XP/Bradesco"
+  );
+  return doCustodianteCerto[0] ?? candidatos[0];
 }
 
 /**
@@ -77,9 +94,15 @@ function normalizarNomeAtivoAcruo(s: string): string {
  * de normalizado) em vez de desistir só porque há mais de um candidato — só desiste se ainda
  * houver empate depois disso.
  */
-function encontrarPorNome(entrada: EntradaAcruoExtrato, ativos: AtivoComIsin[]): AtivoComIsin | null {
+function encontrarPorNome(
+  entrada: EntradaAcruoExtrato,
+  ativos: AtivoComIsin[],
+  formato: "itau" | "pershing"
+): AtivoComIsin | null {
   const nomeEntrada = normalizarNomeAtivoAcruo(entrada.nome);
-  const candidatos = ativos.filter((a) => nomeEntrada.includes(normalizarNomeAtivoAcruo(a.nome)));
+  const candidatos = ativos
+    .filter((a) => (formato === "pershing" ? a.grupo_acruo_nome === "XP/Bradesco" : a.grupo_acruo_nome !== "XP/Bradesco"))
+    .filter((a) => nomeEntrada.includes(normalizarNomeAtivoAcruo(a.nome)));
   if (candidatos.length === 0) return null;
   if (candidatos.length === 1) return candidatos[0];
   const maiorTamanho = Math.max(...candidatos.map((a) => normalizarNomeAtivoAcruo(a.nome).length));
@@ -133,7 +156,7 @@ export async function montarPropostasAcruoEMercado(
   >();
 
   for (const entrada of parseado.entradas) {
-    const ativo = encontrarPorIsin(entrada, ativos) ?? encontrarPorNome(entrada, ativos);
+    const ativo = encontrarPorIsin(entrada, ativos, parseado.formato) ?? encontrarPorNome(entrada, ativos, parseado.formato);
     if (!ativo || !ativo.grupo_acruo_nome || !ativo.conta_acruo_code || !ativo.conta_receita_code) {
       naoReconhecidas.push(entrada);
       continue;
