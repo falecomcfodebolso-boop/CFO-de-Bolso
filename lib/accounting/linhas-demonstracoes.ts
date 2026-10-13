@@ -20,8 +20,9 @@ import { juntarGruposComAnterior, juntarGruposDmplComAnterior, linhasDeGrupos, t
  * Monta as linhas de um bloco do Balanço (ex: "Ativo Circulante" ou
  * "Patrimônio Líquido") a partir das contas já agrupadas por "conta mãe"
  * (ver `agruparPorContaMae` em demonstrativos.ts): uma linha de subtotal
- * por grupo (nível de indentação 1) quando o grupo tem mais de uma
- * conta-filha (nível 2), seguida da linha de "Total" do bloco inteiro.
+ * por grupo (nível de indentação 1, sempre mostrada, mesmo com uma única
+ * conta-filha no grupo), seguida das contas-filha (nível 2) e, por fim,
+ * da linha de "Total" do bloco inteiro.
  */
 function linhasDoBlocoBalanco(
   titulo: string,

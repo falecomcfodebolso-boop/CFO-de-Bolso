@@ -84,9 +84,12 @@ export function dataComparacaoPadrao(data: string): string {
 // =====================================================================
 // Subtotais de "conta mãe" — usado por Balanço, DRE, DFC e DMPL para
 // mostrar um subtotal intermediário entre o total do bloco/categoria e
-// as contas-folha, quando o grupo (código truncado no último segmento)
-// tiver mais de uma conta. Ver `agruparPorContaMae` em demonstrativos.ts
-// pra como os grupos são formados.
+// as contas-folha, sempre um nível acima das contas-folha do grupo
+// (código truncado no último segmento) — mesmo quando o grupo tem uma
+// única conta, pra deixar claro onde esse grupo começa/termina em vez de
+// a conta aparecer "solta", colada no grupo anterior. Ver
+// `agruparPorContaMae` em demonstrativos.ts pra como os grupos são
+// formados.
 // =====================================================================
 
 /** Formato comum (independente da demonstração de origem) que `linhasDeGrupos` consome. */
@@ -138,31 +141,31 @@ export function juntarGruposDmplComAnterior(grupos: GrupoDmpl[], gruposAnt: Grup
  * Monta as linhas de detalhe (subtotal de grupo + contas-filha) a partir
  * de `LinhaGrupoInput[]` já casado com o período anterior (ver
  * `juntarGruposComAnterior`/`juntarGruposDmplComAnterior`). `nivelBase` é
- * o nível de indentação do subtotal de grupo; as contas-filha ficam um
- * nível abaixo quando o grupo tem mais de uma conta (senão, a conta
- * aparece direto em `nivelBase`, sem repetir o subtotal redundante).
+ * o nível de indentação do subtotal de grupo; as contas-filha ficam
+ * sempre um nível abaixo. O subtotal de grupo é sempre mostrado, mesmo
+ * quando o grupo tem uma única conta-filha — sem ele, uma conta "sozinha"
+ * no grupo fica visualmente colada no grupo anterior, confundindo a
+ * leitura (ex.: "1.1.4.004 — Santander- jul27" sem o cabeçalho "1.1.4"
+ * acima dela).
  */
 export function linhasDeGrupos(grupos: LinhaGrupoInput[], nivelBase: number = 1): LinhaAnalise[] {
   const linhas: LinhaAnalise[] = [];
   for (const g of grupos) {
-    const temSubtotalProprio = g.contas.length > 1;
-    if (temSubtotalProprio) {
-      linhas.push({
-        key: `grupo-${g.code}`,
-        label: `${g.code} — ${g.name}`,
-        valor: g.valor,
-        valorAnterior: g.valorAnterior ?? null,
-        indentLevel: nivelBase,
-        subtotal: true,
-      });
-    }
+    linhas.push({
+      key: `grupo-${g.code}`,
+      label: `${g.code} — ${g.name}`,
+      valor: g.valor,
+      valorAnterior: g.valorAnterior ?? null,
+      indentLevel: nivelBase,
+      subtotal: true,
+    });
     for (const c of g.contas) {
       linhas.push({
         key: c.code,
         label: `${c.code} — ${c.name}`,
         valor: c.valor,
         valorAnterior: c.valorAnterior ?? null,
-        indentLevel: temSubtotalProprio ? nivelBase + 1 : nivelBase,
+        indentLevel: nivelBase + 1,
       });
     }
   }
