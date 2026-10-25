@@ -12,7 +12,8 @@ import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/account
 import { resolverPeriodoComAnterior } from "@/lib/export/periodo";
 import { montarSecoesBalancete } from "@/lib/export/balancete";
 import { getLinhasDiario } from "@/lib/export/diario";
-import { buildDiarioSheet, buildLinhasSheet, workbookToBuffer, type LinhaDiario } from "@/lib/export/excel";
+import { getRazoesDetalhados, nomesDeAbaUnicos, type RazaoConta } from "@/lib/export/razoes";
+import { buildDiarioSheet, buildLinhasSheet, buildRazaoDetalheSheet, workbookToBuffer, type LinhaDiario } from "@/lib/export/excel";
 import { buildRelatorioGeralPdf, type SecaoRelatorioGeral } from "@/lib/export/pdf";
 import { fmtDateNumerica } from "@/lib/format";
 import ExcelJS from "exceljs";
@@ -20,7 +21,7 @@ import ExcelJS from "exceljs";
 export const runtime = "nodejs";
 
 /**
- * Relatório geral: DRE, Balanço, DFC, DMPL, Balancete e Diário(s) em um único arquivo, com o mesmo
+ * Relatório geral: DRE, Balanço, DFC, DMPL, Balancete, Razões e Diários em um único arquivo, com o mesmo
  * comparativo das telas de demonstrações (inicio/fim, comparar, inicioAnt/fimAnt).
  * As posições (Balanço e Balancete) são tiradas no fim de cada período — fim × fimAnt.
  */
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
   const { data: dataBalancete } = resolverDataReferencia(fim, intervalo);
   const { data: dataBalanceteAnt } = resolverDataReferencia(fimAnt, intervalo);
 
-  const [dre, dreAnt, balanco, balancoAnt, dfc, dfcAnt, dmpl, dmplAnt, saldos, saldosAnt, diario, diarioAnt] = await Promise.all([
+  const [dre, dreAnt, balanco, balancoAnt, dfc, dfcAnt, dmpl, dmplAnt, saldos, saldosAnt, diario, diarioAnt, razoes, razoesAnt] = await Promise.all([
     getDRE(supabase, currentOrgId, inicio, fim),
     comparar ? getDRE(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
     getBalanco(supabase, currentOrgId, fim),
@@ -49,6 +50,8 @@ export async function GET(req: NextRequest) {
     comparar ? getSaldosPorContaAteData(supabase, currentOrgId, dataBalanceteAnt) : Promise.resolve([] as SaldoConta[]),
     getLinhasDiario(supabase, currentOrgId, inicio, fim),
     comparar ? getLinhasDiario(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve([] as LinhaDiario[]),
+    getRazoesDetalhados(supabase, currentOrgId, inicio, fim),
+    comparar ? getRazoesDetalhados(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve([] as RazaoConta[]),
   ]);
 
   // Rótulos de período (intervalos) e de posição (datas)
@@ -134,6 +137,14 @@ export async function GET(req: NextRequest) {
     })),
   ];
 
+  // Razões (extrato de cada conta com movimento) — do período atual e, com comparação, do anterior.
+  const blocosRazao = [
+    { titulo: "Razão — período atual", prefixoAba: "Razão", periodo: `Período de ${periodoAtual}`, contas: razoes },
+    ...(comparar
+      ? [{ titulo: "Razão — período anterior", prefixoAba: "Razão ant", periodo: `Período de ${periodoAnterior}`, contas: razoesAnt }]
+      : []),
+  ];
+
   // Diários vão no fim: o do período atual e, quando há comparação, o do período anterior.
   const diarios = [
     { titulo: "Diário — Lançamentos do período atual", sheet: "Diário", periodo: `Período de ${periodoAtual}`, linhas: diario },
@@ -160,7 +171,7 @@ export async function GET(req: NextRequest) {
       comparar,
       periodoAtual,
       periodoAnterior: comparar ? periodoAnterior : null,
-    }, diarios);
+    }, diarios, blocosRazao);
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
@@ -183,6 +194,18 @@ export async function GET(req: NextRequest) {
       labelAtual: s.labelAtual,
       labelAnterior: s.labelAnterior,
     });
+  }
+  const abasUsadas = new Set(secoes.map((x) => x.sheet.slice(0, 31)));
+  for (const r of blocosRazao) {
+    const nomes = nomesDeAbaUnicos(
+      r.contas.map((c) => `${r.prefixoAba} ${c.contaCode}`),
+      abasUsadas
+    );
+    for (const c of r.contas) {
+      const aba = nomes.get(`${r.prefixoAba} ${c.contaCode}`)!;
+      abasUsadas.add(aba);
+      buildRazaoDetalheSheet(wb, { contaLabel: c.contaLabel, movimentos: c.movimentos, orgName, periodo: `${r.titulo} · ${r.periodo}`, sheetName: aba });
+    }
   }
   for (const d of diarios) {
     buildDiarioSheet(wb, { linhas: d.linhas, orgName, periodo: d.periodo, sheetName: d.sheet, titulo: d.titulo });

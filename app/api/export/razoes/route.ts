@@ -1,24 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/org";
-import { getMovimentoTodasContas } from "@/lib/accounting/queries";
 import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
 import { fmtDateNumerica } from "@/lib/format";
-import { buildRazaoDetalheSheet, workbookToBuffer, type LinhaMovimento } from "@/lib/export/excel";
+import { buildRazaoDetalheSheet, workbookToBuffer } from "@/lib/export/excel";
+import { getRazoesDetalhados, nomesDeAbaUnicos } from "@/lib/export/razoes";
 import { buildRazoesDetalhadoPdf, type LinhaMovimentoPdf } from "@/lib/export/pdf";
 import ExcelJS from "exceljs";
 
 export const runtime = "nodejs";
 
-export type MovimentoConta = {
-  conta_code: string;
-  conta_name: string;
-  data: string;
-  lancamento_numero: number | string;
-  historico: string;
-  tipo: "D" | "C";
-  valor: number;
-  valor_saldo: number;
-};
+export type { MovimentoConta } from "@/lib/export/razoes";
 
 function hoje() {
   return new Date().toISOString().slice(0, 10);
@@ -26,24 +17,6 @@ function hoje() {
 
 function inicioDoAno(data: string) {
   return `${data.slice(0, 4)}-01-01`;
-}
-
-/** Remove caracteres que o Excel proíbe em nome de aba e garante nomes únicos. */
-function nomesDeAbaUnicos(codigos: string[]): Map<string, string> {
-  const usados = new Set<string>();
-  const porCodigo = new Map<string, string>();
-  for (const codigo of codigos) {
-    let base = codigo.replace(/[\\/?*[\]]/g, "-").slice(0, 31);
-    let nome = base;
-    let sufixo = 2;
-    while (usados.has(nome)) {
-      nome = `${base.slice(0, 28)}-${sufixo}`;
-      sufixo++;
-    }
-    usados.add(nome);
-    porCodigo.set(codigo, nome);
-  }
-  return porCodigo;
 }
 
 /**
@@ -65,41 +38,7 @@ export async function GET(req: NextRequest) {
   const dataInicioParam = req.nextUrl.searchParams.get("dataInicio") || inicioDoAno(data);
   const { data: dataInicio } = resolverDataReferencia(dataInicioParam, intervalo);
 
-  // Uma query só para todas as contas (em vez de uma por conta) — pega tudo até a data
-  // de referência para poder calcular o saldo corrido de cada conta desde o começo, e
-  // filtra para o período [dataInicio, data] só na hora de montar as linhas exibidas.
-  const todosMovimentos = (await getMovimentoTodasContas(supabase, currentOrgId, data)) as MovimentoConta[];
-
-  const porConta = new Map<string, MovimentoConta[]>();
-  for (const m of todosMovimentos) {
-    if (!porConta.has(m.conta_code)) porConta.set(m.conta_code, []);
-    porConta.get(m.conta_code)!.push(m);
-  }
-
-  type ContaDetalhe = { contaCode: string; contaLabel: string; movimentos: LinhaMovimento[] };
-  const contas: ContaDetalhe[] = [];
-  for (const [contaCode, movs] of Array.from(porConta.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
-    let saldoCorrido = 0;
-    const comSaldo = movs.map((m) => {
-      saldoCorrido += Number(m.valor_saldo);
-      return { ...m, saldoCorrido };
-    });
-    const doPeriodo = comSaldo.filter((m) => m.data >= dataInicio && m.data <= data);
-    if (doPeriodo.length === 0) continue;
-
-    contas.push({
-      contaCode,
-      contaLabel: `${contaCode} — ${movs[0].conta_name}`,
-      movimentos: doPeriodo.map((m) => ({
-        data: m.data,
-        lancamentoNumero: m.lancamento_numero,
-        historico: m.historico,
-        tipo: m.tipo,
-        valor: Number(m.valor),
-        saldoCorrido: m.saldoCorrido,
-      })),
-    });
-  }
+  const contas = await getRazoesDetalhados(supabase, currentOrgId, dataInicio, data);
 
   const periodo = `Detalhamento de ${fmtDateNumerica(dataInicio)} a ${fmtDateNumerica(data)}`;
 

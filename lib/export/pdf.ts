@@ -393,12 +393,13 @@ export type SecaoRelatorioGeral = {
 /**
  * Relatório geral (botão "Exportar todos os relatórios" do Dashboard): capa com o índice
  * e os períodos escolhidos, uma seção por demonstração com o comparativo (AV/AH), os
- * Diários de cada período no fim e numeração de páginas no rodapé.
+ * Razões e, no fim, os Diários de cada período, e numeração de páginas no rodapé.
  */
 export async function buildRelatorioGeralPdf(
   secoes: SecaoRelatorioGeral[],
   comum: { currency: string; orgName: string; comparar: boolean; periodoAtual: string; periodoAnterior: string | null },
-  diarios: { titulo: string; periodo: string; linhas: LinhaDiarioPdf[] }[] = []
+  diarios: { titulo: string; periodo: string; linhas: LinhaDiarioPdf[] }[] = [],
+  razoes: { titulo: string; periodo: string; contas: { contaLabel: string; movimentos: LinhaMovimentoPdf[] }[] }[] = []
 ): Promise<Buffer> {
   const { doc, done } = novoDocumentoPaisagem();
   const { currency, orgName, comparar, periodoAtual, periodoAnterior } = comum;
@@ -418,12 +419,28 @@ export async function buildRelatorioGeralPdf(
   doc.moveDown(0.4);
   doc.font("Helvetica").fontSize(10).fillColor("#334155");
   for (const s of secoes) doc.text(s.titulo, { align: "center" });
+  for (const r of razoes) doc.text(`${r.titulo} (${r.contas.length} conta${r.contas.length === 1 ? "" : "s"})`, { align: "center" });
   for (const d of diarios) doc.text(d.titulo, { align: "center" });
   doc.fillColor("#000000");
 
   for (const s of secoes) {
     doc.addPage();
     desenharLinhasAnalise(doc, { ...s, currency, orgName, comparar });
+  }
+
+  // Razões: uma seção por conta com movimento, cada uma começando em página nova
+  for (const r of razoes) {
+    if (r.contas.length === 0) {
+      doc.addPage();
+      cabecalho(doc, r.titulo, orgName, r.periodo);
+      doc.font("Helvetica").fontSize(9).fillColor("#64748b").text("Nenhuma conta com movimento no período.", doc.page.margins.left, doc.y, { width: 400 });
+      doc.fillColor("#000000");
+      continue;
+    }
+    for (const c of r.contas) {
+      doc.addPage();
+      desenharRazaoDetalhe(doc, { ...c, currency, orgName, periodo: `${r.titulo} · ${r.periodo}` });
+    }
   }
 
   // Diários no fim do relatório (sem comparativo — é a lista de lançamentos de cada período)
@@ -470,13 +487,18 @@ function desenharRazaoDetalhe(
   const { contaLabel, movimentos, currency, orgName, periodo } = opts;
   cabecalho(doc, contaLabel, orgName, periodo);
 
+  // Larguras calculadas pela largura útil da página (retrato ou paisagem): as colunas
+  // numéricas têm espaço fixo suficiente pra não quebrar o valor, e o Histórico fica com o resto.
+  const largUtil = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const w = { data: 70, num: 50, natureza: 60, valor: 85, saldo: 85 };
+  const largHistorico = largUtil - (w.data + w.num + w.natureza + w.valor + w.saldo);
   const header: Coluna[] = [
-    { texto: "Data", largura: 65 },
-    { texto: "Nº Lçto", largura: 55 },
-    { texto: "Histórico", largura: 190 },
-    { texto: "Natureza", largura: 65, align: "right" },
-    { texto: "Valor", largura: 60, align: "right" },
-    { texto: "Saldo", largura: 60, align: "right" },
+    { texto: "Data", largura: w.data },
+    { texto: "Nº Lçto", largura: w.num },
+    { texto: "Histórico", largura: largHistorico },
+    { texto: "Natureza", largura: w.natureza, align: "right" },
+    { texto: "Valor", largura: w.valor, align: "right" },
+    { texto: "Saldo", largura: w.saldo, align: "right" },
   ];
   linhaColunas(doc, header, { bold: true });
   doc.moveDown(0.1);
@@ -485,12 +507,12 @@ function desenharRazaoDetalhe(
     linhaColunas(
       doc,
       [
-        { texto: fmtDate(m.data), largura: 65 },
-        { texto: `#${m.lancamentoNumero}`, largura: 55 },
-        { texto: m.historico, largura: 190 },
-        { texto: m.tipo === "D" ? "Débito" : "Crédito", largura: 65, align: "right" },
-        { texto: fmtMoney(m.valor, currency), largura: 60, align: "right" },
-        { texto: fmtMoney(m.saldoCorrido, currency), largura: 60, align: "right", bold: true },
+        { texto: fmtDateNumerica(m.data), largura: w.data },
+        { texto: `#${m.lancamentoNumero}`, largura: w.num },
+        { texto: m.historico, largura: largHistorico },
+        { texto: m.tipo === "D" ? "Débito" : "Crédito", largura: w.natureza, align: "right" },
+        { texto: fmtMoney(m.valor, currency), largura: w.valor, align: "right" },
+        { texto: fmtMoney(m.saldoCorrido, currency), largura: w.saldo, align: "right", bold: true },
       ],
       { headerParaRepetir: header }
     );

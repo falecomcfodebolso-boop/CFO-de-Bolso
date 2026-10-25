@@ -9,7 +9,7 @@ function hoje() {
 }
 
 /**
- * Cartão do Dashboard que baixa todos os relatórios (DRE, Balanço, DFC, DMPL, Balancete e Diários)
+ * Cartão do Dashboard que baixa todos os relatórios (DRE, Balanço, DFC, DMPL, Balancete, Razões e Diários)
  * em um único PDF, com o mesmo seletor de período atual × período anterior das telas de
  * demonstrações. O formulário envia direto para /api/export/relatorio, que devolve o arquivo.
  */
@@ -25,7 +25,7 @@ export function ExportarRelatorios() {
         <h2 className="font-medium text-slate-900">Exportar todos os relatórios</h2>
       </div>
       <p className="text-sm text-slate-500 mb-4">
-        Gera um único PDF com DRE, Balanço Patrimonial, DFC, DMPL e Balancete, com análise vertical e horizontal, e os Diários de lançamentos no final.
+        Gera um único PDF com DRE, Balanço Patrimonial, DFC, DMPL e Balancete, com análise vertical e horizontal, seguidos dos Razões de cada conta e dos Diários de lançamentos no final.
         O Balanço e o Balancete são posicionados na data de fim de cada período.
       </p>
 
