@@ -2,6 +2,7 @@ import { requireOrgContext } from "@/lib/org";
 import { getSaldosPorConta, totalPorNatureza } from "@/lib/accounting/queries";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import Link from "next/link";
+import { ExportarRelatorios } from "./exportar-relatorios";
 
 export default async function DashboardPage() {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
@@ -62,6 +63,8 @@ export default async function DashboardPage() {
           </div>
         ))}
       </div>
+
+      <ExportarRelatorios />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4">

@@ -2,7 +2,7 @@ import PDFDocument from "pdfkit";
 import type { Balanco, Dfc, Dmpl, Dre } from "@/lib/accounting/demonstrativos";
 import type { LinhaAnalise } from "@/lib/accounting/analise";
 import { calcAV, calcVariacao } from "@/lib/accounting/analise";
-import { fmtDate, fmtMoney } from "@/lib/format";
+import { fmtDate, fmtDateNumerica, fmtMoney } from "@/lib/format";
 
 function novoDocumento(): { doc: PDFKit.PDFDocument; done: Promise<Buffer> } {
   const doc = new PDFDocument({ margin: 50, size: "A4", bufferPages: true });
@@ -379,6 +379,84 @@ export async function buildRelatorioLinhasPdf(
   return done;
 }
 
+/** Seção do relatório geral — cada demonstração traz o próprio período e os próprios cabeçalhos de coluna (o Balanço e o Balancete são posições em uma data; DRE, DFC e DMPL são períodos). */
+export type SecaoRelatorioGeral = {
+  titulo: string;
+  linhas: LinhaAnalise[];
+  baseAV: number;
+  baseAVAnterior: number;
+  periodo: string;
+  labelAtual?: string;
+  labelAnterior?: string;
+};
+
+/**
+ * Relatório geral (botão "Exportar todos os relatórios" do Dashboard): capa com o índice
+ * e os períodos escolhidos, uma seção por demonstração com o comparativo (AV/AH), os
+ * Diários de cada período no fim e numeração de páginas no rodapé.
+ */
+export async function buildRelatorioGeralPdf(
+  secoes: SecaoRelatorioGeral[],
+  comum: { currency: string; orgName: string; comparar: boolean; periodoAtual: string; periodoAnterior: string | null },
+  diarios: { titulo: string; periodo: string; linhas: LinhaDiarioPdf[] }[] = []
+): Promise<Buffer> {
+  const { doc, done } = novoDocumentoPaisagem();
+  const { currency, orgName, comparar, periodoAtual, periodoAnterior } = comum;
+
+  // Capa
+  doc.moveDown(4);
+  doc.font("Helvetica-Bold").fontSize(22).fillColor("#0f172a").text("Relatório Contábil Completo", { align: "center" });
+  doc.moveDown(0.5);
+  doc.font("Helvetica").fontSize(13).fillColor("#334155").text(orgName, { align: "center" });
+  doc.moveDown(1.5);
+  doc.fontSize(11).fillColor("#0f172a").text(`Período: ${periodoAtual}`, { align: "center" });
+  if (comparar && periodoAnterior) {
+    doc.text(`Comparado a: ${periodoAnterior}`, { align: "center" });
+  }
+  doc.moveDown(2);
+  doc.font("Helvetica-Bold").fontSize(11).text("Conteúdo", { align: "center" });
+  doc.moveDown(0.4);
+  doc.font("Helvetica").fontSize(10).fillColor("#334155");
+  for (const s of secoes) doc.text(s.titulo, { align: "center" });
+  for (const d of diarios) doc.text(d.titulo, { align: "center" });
+  doc.fillColor("#000000");
+
+  for (const s of secoes) {
+    doc.addPage();
+    desenharLinhasAnalise(doc, { ...s, currency, orgName, comparar });
+  }
+
+  // Diários no fim do relatório (sem comparativo — é a lista de lançamentos de cada período)
+  for (const d of diarios) {
+    doc.addPage();
+    desenharDiario(doc, { ...d, currency, orgName });
+  }
+
+  // Rodapé com numeração (a capa não conta)
+  const range = doc.bufferedPageRange();
+  const total = range.count;
+  for (let i = range.start; i < range.start + total; i++) {
+    doc.switchToPage(i);
+    if (i === range.start) continue;
+    const bottom = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor("#94a3b8")
+      .text(`${orgName} · Página ${i - range.start} de ${total - 1}`, doc.page.margins.left, doc.page.height - 28, {
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+        align: "right",
+        lineBreak: false,
+      });
+    doc.page.margins.bottom = bottom;
+  }
+  doc.fillColor("#000000");
+
+  doc.end();
+  return done;
+}
+
 function desenharRazaoDetalhe(
   doc: PDFKit.PDFDocument,
   opts: {
@@ -461,15 +539,12 @@ export type LinhaDiarioPdf = {
   valor: number;
 };
 
-export async function buildDiarioPdf(opts: {
-  linhas: LinhaDiarioPdf[];
-  currency: string;
-  orgName: string;
-  periodo: string;
-}): Promise<Buffer> {
-  const { linhas, currency, orgName, periodo } = opts;
-  const { doc, done } = novoDocumentoPaisagem();
-  cabecalho(doc, "Diário — Lançamentos", orgName, periodo);
+export function desenharDiario(
+  doc: PDFKit.PDFDocument,
+  opts: { linhas: LinhaDiarioPdf[]; currency: string; orgName: string; periodo: string; titulo?: string }
+) {
+  const { linhas, currency, orgName, periodo, titulo } = opts;
+  cabecalho(doc, titulo ?? "Diário — Lançamentos", orgName, periodo);
 
   const header: Coluna[] = [
     { texto: "Data", largura: 65 },
@@ -483,11 +558,17 @@ export async function buildDiarioPdf(opts: {
   linhaColunas(doc, header, { bold: true });
   doc.moveDown(0.1);
 
+  if (linhas.length === 0) {
+    doc.font("Helvetica").fontSize(9).fillColor("#64748b").text("Nenhum lançamento no período.", doc.page.margins.left, doc.y, { width: 400 });
+    doc.fillColor("#000000");
+    return;
+  }
+
   for (const l of linhas) {
     linhaColunas(
       doc,
       [
-        { texto: fmtDate(l.data), largura: 65 },
+        { texto: fmtDateNumerica(l.data), largura: 65 },
         { texto: `#${l.lancamentoNumero}`, largura: 55 },
         { texto: l.historico, largura: 230 },
         { texto: l.contaCode, largura: 75 },
@@ -498,7 +579,16 @@ export async function buildDiarioPdf(opts: {
       { headerParaRepetir: header }
     );
   }
+}
 
+export async function buildDiarioPdf(opts: {
+  linhas: LinhaDiarioPdf[];
+  currency: string;
+  orgName: string;
+  periodo: string;
+}): Promise<Buffer> {
+  const { doc, done } = novoDocumentoPaisagem();
+  desenharDiario(doc, opts);
   doc.end();
   return done;
 }

@@ -269,14 +269,14 @@ export type LinhaDiario = {
 
 export function buildDiarioSheet(
   wb: ExcelJS.Workbook,
-  opts: { linhas: LinhaDiario[]; orgName: string; periodo: string }
+  opts: { linhas: LinhaDiario[]; orgName: string; periodo: string; sheetName?: string; titulo?: string }
 ) {
-  const { linhas, orgName, periodo } = opts;
-  const ws = wb.addWorksheet("Diário");
+  const { linhas, orgName, periodo, sheetName, titulo } = opts;
+  const ws = wb.addWorksheet((sheetName ?? "Diário").slice(0, 31));
   ws.columns = [{ width: 14 }, { width: 12 }, { width: 40 }, { width: 16 }, { width: 32 }, { width: 12 }, { width: 16 }];
 
   ws.mergeCells("A1:G1");
-  ws.getCell("A1").value = "Diário — Lançamentos";
+  ws.getCell("A1").value = titulo ?? "Diário — Lançamentos";
   ws.getCell("A1").font = { bold: true, size: 14 };
   ws.mergeCells("A2:G2");
   ws.getCell("A2").value = orgName;
