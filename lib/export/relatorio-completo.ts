@@ -1,0 +1,225 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getDRE, getBalanco, getDFC, getDMPL } from "@/lib/accounting/demonstrativos";
+import {
+  montarLinhasDre,
+  montarLinhasBalanco,
+  montarLinhasDfc,
+  montarLinhasDmpl,
+} from "@/lib/accounting/linhas-demonstracoes";
+import { getSaldosPorContaAteData, type SaldoConta } from "@/lib/accounting/queries";
+import { getIntervaloDeLancamentos, resolverDataReferencia } from "@/lib/accounting/data-referencia";
+import { montarSecoesBalancete } from "@/lib/export/balancete";
+import { getLinhasDiario } from "@/lib/export/diario";
+import { getRazoesDetalhados, nomesDeAbaUnicos, type RazaoConta } from "@/lib/export/razoes";
+import { buildDiarioSheet, buildLinhasSheet, buildRazaoDetalheSheet, workbookToBuffer, type LinhaDiario } from "@/lib/export/excel";
+import { buildRelatorioGeralPdf, type SecaoRelatorioGeral } from "@/lib/export/pdf";
+import { fmtDateNumerica } from "@/lib/format";
+import ExcelJS from "exceljs";
+
+export type ParametrosRelatorioCompleto = {
+  inicio: string;
+  fim: string;
+  comparar: boolean;
+  inicioAnt: string;
+  fimAnt: string;
+};
+
+/**
+ * Relatório geral: DRE, Balanço, DFC, DMPL, Balancete, Razões e Diários em um único arquivo,
+ * com o mesmo comparativo das telas de demonstrações. As posições (Balanço e Balancete) são
+ * tiradas no fim de cada período — fim × fimAnt. Usado pelo botão do Dashboard e pela
+ * automação (que roda sem usuário logado, com o cliente admin — por isso recebe o `supabase`
+ * e o `orgId` explicitamente e todas as consultas filtram por org_id).
+ */
+export async function gerarRelatorioCompleto(
+  supabase: SupabaseClient,
+  currentOrgId: string,
+  org: { currency: string; orgName: string },
+  { inicio, fim, comparar, inicioAnt, fimAnt }: ParametrosRelatorioCompleto,
+  formato: "pdf" | "xlsx"
+): Promise<{ buffer: Buffer; nomeArquivo: string; contentType: string }> {
+  const { currency, orgName } = org;
+  const intervalo = await getIntervaloDeLancamentos(supabase, currentOrgId);
+  const { data: dataBalancete } = resolverDataReferencia(fim, intervalo);
+  const { data: dataBalanceteAnt } = resolverDataReferencia(fimAnt, intervalo);
+
+  const [dre, dreAnt, balanco, balancoAnt, dfc, dfcAnt, dmpl, dmplAnt, saldos, saldosAnt, diario, diarioAnt, razoes, razoesAnt] = await Promise.all([
+    getDRE(supabase, currentOrgId, inicio, fim),
+    comparar ? getDRE(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
+    getBalanco(supabase, currentOrgId, fim),
+    comparar ? getBalanco(supabase, currentOrgId, fimAnt) : Promise.resolve(null),
+    getDFC(supabase, currentOrgId, inicio, fim),
+    comparar ? getDFC(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
+    getDMPL(supabase, currentOrgId, inicio, fim),
+    comparar ? getDMPL(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve(null),
+    getSaldosPorContaAteData(supabase, currentOrgId, dataBalancete),
+    comparar ? getSaldosPorContaAteData(supabase, currentOrgId, dataBalanceteAnt) : Promise.resolve([] as SaldoConta[]),
+    getLinhasDiario(supabase, currentOrgId, inicio, fim),
+    comparar ? getLinhasDiario(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve([] as LinhaDiario[]),
+    getRazoesDetalhados(supabase, currentOrgId, inicio, fim),
+    comparar ? getRazoesDetalhados(supabase, currentOrgId, inicioAnt, fimAnt) : Promise.resolve([] as RazaoConta[]),
+  ]);
+
+  // Rótulos de período (intervalos) e de posição (datas)
+  const periodoAtual = `${fmtDateNumerica(inicio)} a ${fmtDateNumerica(fim)}`;
+  const periodoAnterior = `${fmtDateNumerica(inicioAnt)} a ${fmtDateNumerica(fimAnt)}`;
+  const textoPeriodo = comparar ? `${periodoAtual} (comparado a ${periodoAnterior})` : periodoAtual;
+  const labelPeriodoAtual = `${fmtDateNumerica(inicio)} – ${fmtDateNumerica(fim)}`;
+  const labelPeriodoAnterior = `${fmtDateNumerica(inicioAnt)} – ${fmtDateNumerica(fimAnt)}`;
+
+  const textoPosicao = (d: string, dAnt: string) =>
+    comparar ? `Posição em ${fmtDateNumerica(d)} (comparado a ${fmtDateNumerica(dAnt)})` : `Posição em ${fmtDateNumerica(d)}`;
+
+  const porPeriodo = { periodo: textoPeriodo, labelAtual: labelPeriodoAtual, labelAnterior: labelPeriodoAnterior };
+  const porPosicaoBalanco = { periodo: textoPosicao(fim, fimAnt), labelAtual: fmtDateNumerica(fim), labelAnterior: fmtDateNumerica(fimAnt) };
+  const porPosicaoBalancete = {
+    periodo: textoPosicao(dataBalancete, dataBalanceteAnt),
+    labelAtual: fmtDateNumerica(dataBalancete),
+    labelAnterior: fmtDateNumerica(dataBalanceteAnt),
+  };
+
+  const linhasDre = montarLinhasDre(dre, dreAnt);
+  const { linhasAtivo, linhasPassivoPl } = montarLinhasBalanco(balanco, balancoAnt);
+  const dfcLinhas = montarLinhasDfc(dfc, dfcAnt);
+  const { linhasResumo: dmplResumo, linhasContas: dmplContas } = montarLinhasDmpl(dmpl, dmplAnt);
+
+  const secoes: (SecaoRelatorioGeral & { sheet: string })[] = [
+    {
+      titulo: "DRE — Demonstração do Resultado do Exercício",
+      sheet: "DRE",
+      linhas: linhasDre,
+      baseAV: dre.receitaLiquida,
+      baseAVAnterior: dreAnt?.receitaLiquida ?? 0,
+      ...porPeriodo,
+    },
+    {
+      titulo: "Balanço Patrimonial — Ativo",
+      sheet: "Balanço - Ativo",
+      linhas: linhasAtivo,
+      baseAV: balanco.ativoTotal,
+      baseAVAnterior: balancoAnt?.ativoTotal ?? 0,
+      ...porPosicaoBalanco,
+    },
+    {
+      titulo: "Balanço Patrimonial — Passivo + Patrimônio Líquido",
+      sheet: "Balanço - Passivo + PL",
+      linhas: linhasPassivoPl,
+      baseAV: balanco.passivoMaisPl,
+      baseAVAnterior: balancoAnt?.passivoMaisPl ?? 0,
+      ...porPosicaoBalanco,
+    },
+    {
+      titulo: "DFC — Demonstração do Fluxo de Caixa",
+      sheet: "DFC",
+      linhas: dfcLinhas.linhas,
+      baseAV: dfcLinhas.baseAV,
+      baseAVAnterior: dfcLinhas.baseAVAnterior,
+      ...porPeriodo,
+    },
+    {
+      titulo: "DMPL — Mutações do Patrimônio Líquido",
+      sheet: "DMPL",
+      linhas: dmplResumo,
+      baseAV: dmpl.saldoFinal,
+      baseAVAnterior: dmplAnt?.saldoFinal ?? 0,
+      ...porPeriodo,
+    },
+    ...(dmplContas.length > 0
+      ? [
+          {
+            titulo: "DMPL — Movimentação por conta do Patrimônio Líquido",
+            sheet: "DMPL - Contas",
+            linhas: dmplContas,
+            baseAV: dmpl.saldoFinal,
+            baseAVAnterior: dmplAnt?.saldoFinal ?? 0,
+            ...porPeriodo,
+          },
+        ]
+      : []),
+    ...montarSecoesBalancete(saldos, saldosAnt, comparar).map((s) => ({
+      ...s,
+      sheet: `Balancete - ${s.sheet}`,
+      ...porPosicaoBalancete,
+    })),
+  ];
+
+  // Razões (extrato de cada conta com movimento) — do período atual e, com comparação, do anterior.
+  const blocosRazao = [
+    { titulo: "Razão — período atual", prefixoAba: "Razão", periodo: `Período de ${periodoAtual}`, contas: razoes },
+    ...(comparar
+      ? [{ titulo: "Razão — período anterior", prefixoAba: "Razão ant", periodo: `Período de ${periodoAnterior}`, contas: razoesAnt }]
+      : []),
+  ];
+
+  // Diários vão no fim: o do período atual e, quando há comparação, o do período anterior.
+  const diarios = [
+    { titulo: "Diário — Lançamentos do período atual", sheet: "Diário", periodo: `Período de ${periodoAtual}`, linhas: diario },
+    ...(comparar
+      ? [
+          {
+            titulo: "Diário — Lançamentos do período anterior",
+            sheet: "Diário - Período anterior",
+            periodo: `Período de ${periodoAnterior}`,
+            linhas: diarioAnt,
+          },
+        ]
+      : []),
+  ];
+
+  const nomeArquivo = comparar
+    ? `relatorio-completo-${inicio}-a-${fim}-vs-${inicioAnt}-a-${fimAnt}`
+    : `relatorio-completo-${inicio}-a-${fim}`;
+
+  if (formato === "pdf") {
+    const buffer = await buildRelatorioGeralPdf(
+      secoes,
+      {
+        currency,
+        orgName,
+        comparar,
+        periodoAtual,
+        periodoAnterior: comparar ? periodoAnterior : null,
+      },
+      diarios,
+      blocosRazao
+    );
+    return { buffer, nomeArquivo: `${nomeArquivo}.pdf`, contentType: "application/pdf" };
+  }
+
+  const wb = new ExcelJS.Workbook();
+  for (const s of secoes) {
+    buildLinhasSheet(wb, {
+      titulo: s.titulo,
+      sheetName: s.sheet,
+      linhas: s.linhas,
+      baseAV: s.baseAV,
+      baseAVAnterior: s.baseAVAnterior,
+      orgName,
+      periodo: s.periodo,
+      comparar,
+      labelAtual: s.labelAtual,
+      labelAnterior: s.labelAnterior,
+    });
+  }
+  const abasUsadas = new Set(secoes.map((x) => x.sheet.slice(0, 31)));
+  for (const r of blocosRazao) {
+    const nomes = nomesDeAbaUnicos(
+      r.contas.map((c) => `${r.prefixoAba} ${c.contaCode}`),
+      abasUsadas
+    );
+    for (const c of r.contas) {
+      const aba = nomes.get(`${r.prefixoAba} ${c.contaCode}`)!;
+      abasUsadas.add(aba);
+      buildRazaoDetalheSheet(wb, { contaLabel: c.contaLabel, movimentos: c.movimentos, orgName, periodo: `${r.titulo} · ${r.periodo}`, sheetName: aba });
+    }
+  }
+  for (const d of diarios) {
+    buildDiarioSheet(wb, { linhas: d.linhas, orgName, periodo: d.periodo, sheetName: d.sheet, titulo: d.titulo });
+  }
+  const buffer = await workbookToBuffer(wb);
+  return {
+    buffer,
+    nomeArquivo: `${nomeArquivo}.xlsx`,
+    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  };
+}

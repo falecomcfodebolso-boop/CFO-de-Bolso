@@ -16,6 +16,7 @@ import {
   CreditCard,
   Scale3D,
   CalendarClock,
+  Bot,
 } from "lucide-react";
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/org";
@@ -56,6 +57,7 @@ function montarNav(ehBrasilReais: boolean, temVariasEmpresas: boolean): NavEntry
     { type: "link", href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className={ICON_CLASS} /> },
     { type: "link", href: "/diario", label: "Diário", icon: <BookOpenCheck className={ICON_CLASS} /> },
     { type: "link", href: "/importar", label: "Importar", icon: <Upload className={ICON_CLASS} /> },
+    { type: "link", href: "/automacao", label: "Automação", icon: <Bot className={ICON_CLASS} /> },
     { type: "group", label: "Relatórios", icon: <ScrollText className={ICON_CLASS} />, items: relatorios },
     { type: "group", label: "Carteira", icon: <LineChart className={ICON_CLASS} />, items: carteira },
     { type: "link", href: "/cfo-bolso", label: "CFO de Bolso", icon: <MessageCircle className={ICON_CLASS} /> },

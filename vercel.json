@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/automacao/processar", "schedule": "0 10 * * *" }
+  ]
+}

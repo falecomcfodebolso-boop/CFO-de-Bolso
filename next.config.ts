@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
   // produção (mesmo funcionando local). Isso força a inclusão manual.
   outputFileTracingIncludes: {
     "/importar": ["./node_modules/pdfjs-dist/legacy/build/**/*"],
+    "/api/automacao/processar": ["./node_modules/pdfjs-dist/legacy/build/**/*"],
   },
 };
 

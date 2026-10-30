@@ -219,7 +219,7 @@ const LINHA_PDF_REGEX =
 // ---------------------------------------------------------------------
 const CABECALHO_CASH_TRANSACTIONS_ITAU_REGEX = /Cash Transactions/i;
 const OPENING_BALANCE_ITAU_REGEX = /Opening Balance Account:\s*\S+\s+[A-Z]{3}\s+(-?[\d.,]+)\s*$/i;
-const CLOSING_BALANCE_ITAU_REGEX = /^Closing Balance\s+(-?[\d.,]+)\s*$/i;
+export const CLOSING_BALANCE_ITAU_REGEX = /^Closing Balance\s+(-?[\d.,]+)\s*$/i;
 const INICIO_BLOCO_ITAU_CASH_REGEX = /^(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(.+)$/;
 const FIM_BLOCO_ITAU_CASH_REGEX = /^(.*?)(-?[\d,]+\.\d{2})\s+(-?[\d,]+\.\d{2})\s*$/;
 const JANELA_MAX_BLOCO_ITAU_CASH = 6;
