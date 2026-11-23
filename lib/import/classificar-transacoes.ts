@@ -23,10 +23,12 @@ import { sugerirClassificacoes, type ContaResumo, type SugestaoClassificacao } f
 
 const RE_CUPOM =
   /(BOND INTEREST|INTEREST RECEIVED|INTEREST PAYMENT|COUPON|BROK\.TRANS\W+INT\b|RECEBIMENTO DE JUROS|PAGAMENTO DE CUPOM)/i;
+// Compra de título/fundo: a contrapartida precisa ser a conta DAQUELE ativo.
+const RE_COMPRA = /(SECURITY PURCHASE|\bBOT\b|PURCHASED|\bBUY\b|COMPRA DE)/i;
 const RE_ISIN_CUSIP = /\b([A-Z]{2}[A-Z0-9]{9}\d|[0-9A-Z]{9})\b/g;
 const RE_DATA_CURTA = /(\d{2})[.,/](\d{2})[.,/](\d{2,4})/g;
 const RE_FACE = /\$\s?([\d,]{4,})|\b(\d{1,3}(?:,\d{3})+)(?:\.\d+)?\s+at\b/gi;
-const TOKENS_GENERICOS = new Set(["CLN", "INC", "CORP", "BANK", "FIN", "GLOB", "GLOBAL", "INTL", "CO", "SA", "THE", "AND", "NOTE", "FUND"]);
+const TOKENS_GENERICOS = new Set(["CLN", "INC", "CORP", "BANK", "FIN", "GLOB", "GLOBAL", "INTL", "CO", "SA", "THE", "AND", "NOTE", "FUND", "ITAU", "BRADESCO", "XP"]);
 
 export type Custodiante = "itau" | "bradesco" | null;
 
@@ -46,6 +48,17 @@ export type IdentificacaoCupom =
   | { tipo: "acruo"; conta: string } // papel com acruo → baixa juros acruados (nunca receita)
   | { tipo: "sem_acruo" } // papel identificado, sem acruo → receita é o correto
   | { tipo: "desconhecido" };
+
+/** Palavras do nome da conta (≥3 letras, sem as genéricas) que aparecem na descrição. */
+function nomeDaContaNaDescricao(nomeConta: string, descricao: string): boolean {
+  const desc = new Set(normalizar(descricao).replace(/[^A-Z0-9 ]/g, " ").split(/\s+/).filter(Boolean));
+  return normalizar(nomeConta)
+    .replace(/\(.*?\)/g, " ")
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 3 && !TOKENS_GENERICOS.has(t) && !/^\d+$/.test(t))
+    .some((t) => desc.has(t));
+}
 
 export function ehRecebimentoDeCupom(t: { descricao: string; valor: number }): boolean {
   return t.valor > 0 && RE_CUPOM.test(t.descricao);
@@ -196,6 +209,17 @@ export async function classificarTransacoes(
       custodiante && !conta.code.startsWith("1.1.1.") && custodianteDaConta(conta.name) && custodianteDaConta(conta.name) !== custodiante;
     if (outroCustodiante) return;
     if (cupomSemPapel.has(i) && conta.natureza === "RECEITA") return;
+    // Compra de ativo: só aceita a conta se o nome dela aparecer na descrição (evita, p.ex.,
+    // "BOT 51 CSTNL" — compra do ETF — ir para a conta do título da GM).
+    const t = transacoes[i];
+    if (
+      t.valor < 0 &&
+      RE_COMPRA.test(t.descricao) &&
+      conta.natureza === "ATIVO" &&
+      !conta.code.startsWith("1.1.1.") &&
+      !nomeDaContaNaDescricao(conta.name, t.descricao)
+    )
+      return;
     resultado[i] = { index: i, conta_code: s.conta_code, confianca: cupomSemPapel.has(i) ? "baixa" : s.confianca };
   });
   return resultado;

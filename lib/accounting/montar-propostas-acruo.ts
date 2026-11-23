@@ -224,13 +224,19 @@ export async function montarPropostasAcruoEMercado(
   // mercado deles em outras seções do PDF (Alternatives/Equities/High Yield sem cupom).
   const { data: ativosMercadoData, error: ativosMercadoError } = await supabase
     .from("ativos")
-    .select("id, nome, isin, conta_code, conta_ganho_perda_mercado_code")
+    .select("id, nome, isin, conta_code, conta_ganho_perda_mercado_code, custodiante")
     .eq("org_id", orgId)
     .eq("categoria_acruo", "mercado");
   if (ativosMercadoError) return { error: ativosMercadoError.message };
 
+  // Mesmo ISIN pode estar nos dois custodiantes (ex.: ETF CSPX no Itaú e no Bradesco): o valor
+  // de mercado de um extrato só vale para a posição DAQUELE custodiante.
+  const doCustodiante = (custodiante: string | null) => {
+    const ehBradesco = /bradesco|xp|pershing/i.test(custodiante ?? "");
+    return parseado.formato === "pershing" ? ehBradesco : !ehBradesco;
+  };
   const ativosMercado = (ativosMercadoData ?? []).filter(
-    (a) => a.isin && a.conta_code && a.conta_ganho_perda_mercado_code
+    (a) => a.isin && a.conta_code && a.conta_ganho_perda_mercado_code && doCustodiante(a.custodiante)
   );
 
   let propostasMercado: PropostaMarcacao[] = [];

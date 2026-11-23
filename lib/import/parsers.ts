@@ -225,7 +225,7 @@ const INICIO_BLOCO_ITAU_CASH_REGEX = /^(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(\d{1,2}\/\
 const FIM_BLOCO_ITAU_CASH_REGEX = /^(.*?)(-?[\d,]+\.\d{2})\s+(-?[\d,]+\.\d{2})\s*$/;
 const JANELA_MAX_BLOCO_ITAU_CASH = 6;
 
-function parsePDFCashTransactionsItauPrivateBank(texto: string): TransacaoExtraida[] {
+export function parsePDFCashTransactionsItauPrivateBank(texto: string): TransacaoExtraida[] {
   if (!CABECALHO_CASH_TRANSACTIONS_ITAU_REGEX.test(texto)) return [];
   const linhas = texto
     .split(/\r?\n/)
@@ -252,6 +252,24 @@ function parsePDFCashTransactionsItauPrivateBank(texto: string): TransacaoExtrai
     if (!inicio) continue;
 
     const dataOperacao = parseDataFlexivel(inicio[1]);
+
+    // Lançamento de UMA linha só (descrição, valor e saldo juntos — ex.: "Outward Fedwire
+    // Charges - Fees -50.00 54,032.65"). Sem este caso o bloco era descartado e o valor dele
+    // ia parar dentro do lançamento seguinte (o cupom do United Mexican saiu 3.200 em vez de
+    // 3.250, e a tarifa de 50 sumiu) — o saldo final continuava batendo, por isso passava.
+    const linhaUnica = inicio[3].match(FIM_BLOCO_ITAU_CASH_REGEX);
+    if (linhaUnica && dataOperacao) {
+      const saldoLinha = parseValorFlexivel(linhaUnica[3]);
+      if (saldoLinha !== null) {
+        const valor = Math.round((saldoLinha - saldoAnterior) * 100) / 100;
+        if (valor !== 0) {
+          transacoes.push({ data: dataOperacao, descricao: linhaUnica[1].trim().slice(0, 300), valor });
+        }
+        saldoAnterior = saldoLinha;
+        continue;
+      }
+    }
+
     const descricaoPartes = [inicio[3].trim()];
     let saldoNovo: number | null = null;
     let j = i + 1;
