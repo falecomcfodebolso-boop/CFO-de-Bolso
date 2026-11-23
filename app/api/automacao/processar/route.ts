@@ -18,8 +18,9 @@ export const maxDuration = 300;
  *   1. descobre a organização/conta bancária pela regra (automacao_regras);
  *   2. importa, classifica, valida e — só sem nenhuma pendência — lança (tudo ou nada);
  *   3. se todos os arquivos da organização naquele e-mail deram certo, gera o relatório
- *      completo do período (comparado ao período anterior), guarda no Storage e manda
- *      por e-mail; se não, manda a lista de pendências com o link para revisar.
+ *      completo do período (comparado ao período anterior) e guarda no Storage — de lá
+ *      ele é baixado para o computador por scripts/baixar-relatorios.mjs (o PDF NÃO vai
+ *      por e-mail); o e-mail de retorno leva só o resumo e as pendências.
  */
 
 type Regra = {
@@ -188,7 +189,6 @@ export async function GET(req: NextRequest) {
     }
 
     // Relatório completo por organização — só quando TODOS os arquivos dela deram certo.
-    const anexosEmail: { nomeArquivo: string; buffer: Buffer }[] = [];
     const linhasRelatorio: string[] = [];
     const porOrg = new Map<string, ResultadoArquivo[]>();
     for (const r of resultados) {
@@ -227,11 +227,12 @@ export async function GET(req: NextRequest) {
               lista.map((x) => x.execucaoId).filter((x): x is string => !!x)
             );
         }
-        anexosEmail.push({ nomeArquivo: rel.nomeArquivo, buffer: rel.buffer });
         linhasRelatorio.push(
-          `${org.name}: relatório completo de ${fmtDateNumerica(inicio)} a ${fmtDateNumerica(fim)} (comparado a ${fmtDateNumerica(
-            ant.inicio
-          )} a ${fmtDateNumerica(ant.fim)}) em anexo.`
+          upErr
+            ? `${org.name}: lançamentos feitos, mas falhou ao salvar o relatório: ${upErr.message}`
+            : `${org.name}: relatório completo de ${fmtDateNumerica(inicio)} a ${fmtDateNumerica(fim)} (comparado a ${fmtDateNumerica(
+                ant.inicio
+              )} a ${fmtDateNumerica(ant.fim)}) salvo — será baixado para o computador na próxima sincronização (${rel.nomeArquivo}).`
         );
       } catch (e) {
         linhasRelatorio.push(`${org.name}: lançamentos feitos, mas falhou ao gerar o relatório: ${(e as Error).message}`);
@@ -269,7 +270,6 @@ export async function GET(req: NextRequest) {
         assunto: `${algumProblema ? "[Revisar] " : "[OK] "}CFO de Bolso — ${email.assunto || "extratos"}`,
         texto,
         responderA: email.messageId,
-        anexos: anexosEmail,
       });
     } catch {
       // o resultado continua registrado em /automacao mesmo se o aviso falhar

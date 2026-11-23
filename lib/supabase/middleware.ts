@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/privacidade", "/termos", "/auth/callback"];
+// "/api/cron" e "/api/automacao" são chamadas por agendadores (sem sessão de usuário) e fazem
+// a própria autenticação (CRON_SECRET / chave de download); as rotas desse prefixo que servem
+// o navegador do usuário chamam requireOrgContext(), que continua exigindo login.
+const PUBLIC_PATHS = ["/login", "/signup", "/privacidade", "/termos", "/auth/callback", "/api/cron", "/api/automacao"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

@@ -52,7 +52,8 @@ export default async function AutomacaoPage() {
         <h1 className="text-xl font-semibold text-slate-900">Automação</h1>
         <p className="text-sm text-slate-500">
           Todo dia a rotina lê os extratos enviados por e-mail, importa, valida e só lança no Diário se não houver
-          nenhuma pendência. Com tudo certo, gera o relatório completo do período e envia por e-mail.
+          nenhuma pendência. Com tudo certo, gera o relatório completo do período, que é baixado para o computador
+          (pasta “Relatórios CFO de Bolso”) pelo agendamento do Windows. O e-mail de retorno traz só o resumo.
         </p>
       </div>
 

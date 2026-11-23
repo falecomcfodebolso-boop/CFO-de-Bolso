@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { pareceBacFloridaOnline, parseBacFloridaOnline } from "./parse-bac-florida-online";
 import ExcelJS from "exceljs";
 // IMPORTANTE: "pdf-parse" (via pdfjs-dist) referencia globais de navegador
 // (DOMMatrix, ImageData, Path2D) que não existem no runtime Node.js da
@@ -359,6 +360,18 @@ export async function parsePDF(buffer: ArrayBuffer): Promise<TransacaoExtraida[]
   // parsePDFCashTransactionsItauPrivateBank).
   const itauCash = parsePDFCashTransactionsItauPrivateBank(texto);
   if (itauCash.length > 0) return itauCash;
+
+  // Tela "Account Details" do internet banking do Bradesco Bac Florida
+  // impressa em PDF — datas/valores e descrições vêm em blocos separados
+  // por página (ver lib/import/parse-bac-florida-online.ts).
+  if (pareceBacFloridaOnline(texto)) {
+    try {
+      const bacFlorida = parseBacFloridaOnline(texto);
+      if (bacFlorida.length > 0) return bacFlorida;
+    } catch (e) {
+      throw new ParseError((e as Error).message);
+    }
+  }
 
   const transacoes: TransacaoExtraida[] = [];
   for (const linhaBruta of texto.split(/\r?\n/)) {

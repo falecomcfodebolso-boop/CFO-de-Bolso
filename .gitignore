@@ -45,3 +45,7 @@ node_modules.tar.gz
 tail_remaining.tar.gz
 nm_chunks/
 npm-install.log
+
+# instalador do download de relatorios (contem a chave de download) e lixeira local
+instalador-relatorios-pc/
+_to_delete/
