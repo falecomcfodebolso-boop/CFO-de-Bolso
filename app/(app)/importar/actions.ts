@@ -10,8 +10,7 @@ import {
   type TransacaoExtraida,
   type TipoArquivoImportacao,
 } from "@/lib/import/parsers";
-import { sugerirClassificacoes } from "@/lib/import/classify";
-import { sugerirClassificacaoCupomAcruo } from "@/lib/accounting/detectar-cupom-acruo";
+import { classificarTransacoes } from "@/lib/import/classificar-transacoes";
 import { parseHoldingsDePdf, type AtivoProposto } from "@/lib/portfolio/parse-holdings";
 import {
   montarPropostasAcruoEMercado,
@@ -277,9 +276,8 @@ export async function uploadImportUnificadoAction(
       // sugira por engano a conta do próprio ativo em vez da conta de juros
       // acruados a receber (ver lib/accounting/detectar-cupom-acruo.ts).
       // Só cai na IA pro que essa regra não reconhecer.
-      const sugestoesCupom = await sugerirClassificacaoCupomAcruo(transacoes, supabase, currentOrgId);
-      const sugestoesIA = await sugerirClassificacoes(transacoes, contas ?? []);
-      const sugestoes = transacoes.map((_, i) => sugestoesCupom.get(i) ?? sugestoesIA[i]);
+      // Regra fixa de cupom + IA + travas — ver lib/import/classificar-transacoes.ts.
+      const sugestoes = await classificarTransacoes(supabase, currentOrgId, contaBancariaCode, transacoes, contas ?? []);
       const atualizacoes = inseridas
         .map((row, i) => ({ id: row.id, sugestao: sugestoes[i] }))
         .filter((u) => u.sugestao?.conta_code);

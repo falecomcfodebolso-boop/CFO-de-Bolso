@@ -21,7 +21,14 @@ Regras:
 - "conta_code" deve ser um código EXATO da lista de contas fornecida, ou null se nenhuma conta parecer
   razoável para aquela descrição.
 - "confianca" é "alta", "media" ou "baixa" — use "baixa" quando a descrição for muito genérica ou ambígua.
-- Toda transação da lista deve aparecer no array de saída, na mesma ordem.`;
+- Toda transação da lista deve aparecer no array de saída, na mesma ordem.
+- Recebimento de juros/cupom de título (ex.: "Interest Payment", "Bond Interest", "INT $..."): a contrapartida
+  é SEMPRE a conta de Juros Acruados a Receber (1.1.2.x) do grupo do título — NUNCA uma conta de receita (4.x),
+  porque a receita já foi reconhecida na apuração mensal de acruo.
+- Use somente contas do MESMO banco/custodiante do extrato informado: num extrato do Itaú, nunca uma conta
+  marcada "XP/Bradesco"; num extrato do Bradesco/XP, nunca uma conta marcada "Itaú".
+- Compra/venda de título ou fundo ("SECURITY PURCHASE", "BOT", "SOLD"): a contrapartida é a conta do próprio
+  ativo DESSE custodiante.`;
 
 // Descrições vindas de extratos de custódia/corretora (parser multi-linha) podem
 // concatenar várias linhas do PDF original e ficar bem mais longas que uma
@@ -46,7 +53,8 @@ function extrairJsonArray(texto: string): unknown {
  */
 export async function sugerirClassificacoes(
   transacoes: TransacaoExtraida[],
-  contas: ContaResumo[]
+  contas: ContaResumo[],
+  contexto?: { nomeBanco?: string }
 ): Promise<SugestaoClassificacao[]> {
   const vazio = transacoes.map((_, index) => ({ index, conta_code: null, confianca: null }) as const);
 
@@ -89,7 +97,7 @@ export async function sugerirClassificacoes(
         messages: [
           {
             role: "user",
-            content: `PLANO DE CONTAS:\n${listaContas}\n\nTRANSAÇÕES:\n${listaTransacoes}`,
+            content: `${contexto?.nomeBanco ? `EXTRATO DO BANCO: ${contexto.nomeBanco}\n\n` : ""}PLANO DE CONTAS:\n${listaContas}\n\nTRANSAÇÕES:\n${listaTransacoes}`,
           },
         ],
       }),

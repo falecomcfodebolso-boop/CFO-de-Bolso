@@ -9,8 +9,7 @@ import {
   type TipoArquivoImportacao,
   type TransacaoExtraida,
 } from "@/lib/import/parsers";
-import { sugerirClassificacoes } from "@/lib/import/classify";
-import { sugerirClassificacaoCupomAcruo } from "@/lib/accounting/detectar-cupom-acruo";
+import { classificarTransacoes } from "@/lib/import/classificar-transacoes";
 import { montarPropostasAcruoEMercado } from "@/lib/accounting/montar-propostas-acruo";
 import { getBalanco } from "@/lib/accounting/demonstrativos";
 import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
@@ -195,14 +194,12 @@ export async function processarArquivoAutomatico(
     .select("id");
   if (insertError) throw insertError;
 
-  const sugestoesCupom = await sugerirClassificacaoCupomAcruo(transacoes, supabase, orgId);
-  let sugestoesIA: Awaited<ReturnType<typeof sugerirClassificacoes>> = [];
+  let sugestoes: Awaited<ReturnType<typeof classificarTransacoes>> = transacoes.map(() => null);
   try {
-    sugestoesIA = await sugerirClassificacoes(transacoes, contas ?? []);
+    sugestoes = await classificarTransacoes(supabase, orgId, contaBancariaCode, transacoes, contas ?? []);
   } catch {
-    sugestoesIA = [];
+    // sem sugestão → todas viram pendência de revisão
   }
-  const sugestoes = transacoes.map((_, i) => sugestoesCupom.get(i) ?? sugestoesIA[i] ?? null);
 
   await Promise.all(
     inseridas.map((row, i) =>

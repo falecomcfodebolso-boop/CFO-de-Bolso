@@ -3,6 +3,7 @@
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validarContrapartida } from "@/lib/import/classificar-transacoes";
 
 export type ActionState = { error?: string; duplicata?: { numero: number } } | null;
 
@@ -75,6 +76,16 @@ export async function confirmarTransacaoAction(
 
   const valorAbs = Math.abs(Number(transacao.valor));
   const entrada = Number(transacao.valor) > 0;
+
+  // Trava contábil (cupom nunca é receita; nada de conta de outro custodiante) — não tem "forçar".
+  const erroContrapartida = await validarContrapartida(
+    supabase,
+    currentOrgId,
+    contaBancaria,
+    { descricao: transacao.descricao, valor: Number(transacao.valor) },
+    contaCode
+  );
+  if (erroContrapartida) return { error: erroContrapartida };
 
   const forcar = String(formData.get("forcar") || "") === "1";
   if (!forcar) {
@@ -227,6 +238,18 @@ export async function confirmarVariasAction(
 
     const valorAbs = Math.abs(Number(transacao.valor));
     const entrada = Number(transacao.valor) > 0;
+
+    const erroContrapartida = await validarContrapartida(
+      supabase,
+      currentOrgId,
+      lote.conta_bancaria_code,
+      { descricao: transacao.descricao, valor: Number(transacao.valor) },
+      item.contaCode
+    );
+    if (erroContrapartida) {
+      erros.push(erroContrapartida);
+      continue;
+    }
 
     if (!item.forcar) {
       const duplicata = await encontrarLancamentoDuplicado(
