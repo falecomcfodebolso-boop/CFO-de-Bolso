@@ -66,11 +66,15 @@ function encontrarPorIsin(
       .includes(entrada.isin as string)
   );
   if (candidatos.length === 0) return null;
-  if (candidatos.length === 1) return candidatos[0];
+  // O filtro de custodiante vale SEMPRE, mesmo com um único candidato: se o papel só está
+  // cadastrado no outro custodiante (ex.: Petrobrás jan/31 cadastrado só no grupo XP/Bradesco
+  // e aparecendo no extrato do Itaú), a posição deste extrato simplesmente não está na
+  // Carteira — devolve null para a linha cair em "não reconhecidas" em vez de propor o juro
+  // acruado do Itaú dentro do grupo da XP/Bradesco.
   const doCustodianteCerto = candidatos.filter((a) =>
     formato === "pershing" ? a.grupo_acruo_nome === "XP/Bradesco" : a.grupo_acruo_nome !== "XP/Bradesco"
   );
-  return doCustodianteCerto[0] ?? candidatos[0];
+  return doCustodianteCerto[0] ?? null;
 }
 
 /**
