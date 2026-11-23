@@ -11,6 +11,8 @@ import {
   type TipoArquivoImportacao,
 } from "@/lib/import/parsers";
 import { classificarTransacoes } from "@/lib/import/classificar-transacoes";
+import { filtrarTransacoesNovas } from "@/lib/import/filtrar-novas";
+import { fmtDateNumerica } from "@/lib/format";
 import { parseHoldingsDePdf, type AtivoProposto } from "@/lib/portfolio/parse-holdings";
 import {
   montarPropostasAcruoEMercado,
@@ -207,6 +209,26 @@ export async function uploadImportUnificadoAction(
     return { error: "Não encontrei nenhuma transação, posição ou apuração reconhecível nesse arquivo." };
   }
 
+  // Só o que ainda não foi contabilizado: tira o que já está no Diário e o que
+  // cai em período fechado (ver lib/import/filtrar-novas.ts).
+  let ignoradasJaLancadas = 0;
+  let ignoradasPeriodoFechado = 0;
+  if (transacoes.length > 0 && contaBancariaCode) {
+    const filtro = await filtrarTransacoesNovas(supabase, currentOrgId, contaBancariaCode, transacoes);
+    ignoradasJaLancadas = filtro.jaLancadas;
+    ignoradasPeriodoFechado = filtro.periodoFechado;
+    if (filtro.novas.length === 0 && !temOutrasPropostas) {
+      const partes = [
+        filtro.jaLancadas > 0 ? `${filtro.jaLancadas} já estão no Diário` : null,
+        filtro.periodoFechado > 0
+          ? `${filtro.periodoFechado} são de período fechado (até ${fmtDateNumerica(filtro.dataFechamento!)})`
+          : null,
+      ].filter(Boolean);
+      return { error: `Nenhuma transação nova nesse extrato: ${partes.join(" e ")}.` };
+    }
+    transacoes = filtro.novas;
+  }
+
   // Cria o lote de transações bancárias, se o arquivo trouxe alguma. Só aqui a
   // conta bancária é obrigatória — ela não se aplica a Statements de custódia
   // (juros, posições) que não têm seção de caixa nenhuma.
@@ -247,6 +269,8 @@ export async function uploadImportUnificadoAction(
         nome_arquivo: file.name,
         tipo_arquivo: tipo,
         total_transacoes: transacoes.length,
+        ignoradas_ja_lancadas: ignoradasJaLancadas,
+        ignoradas_periodo_fechado: ignoradasPeriodoFechado,
       })
       .select("id")
       .single();

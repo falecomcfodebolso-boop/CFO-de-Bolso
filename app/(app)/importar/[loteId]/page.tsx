@@ -15,7 +15,7 @@ export default async function LoteImportacaoPage({
 
   const { data: lote } = await supabase
     .from("import_lotes")
-    .select("id, nome_arquivo, tipo_arquivo, conta_bancaria_code, total_transacoes, created_at")
+    .select("id, nome_arquivo, tipo_arquivo, conta_bancaria_code, total_transacoes, created_at, ignoradas_ja_lancadas, ignoradas_periodo_fechado")
     .eq("id", loteId)
     .eq("org_id", currentOrgId)
     .maybeSingle();
@@ -53,6 +53,18 @@ export default async function LoteImportacaoPage({
           Conta bancária: {lote.conta_bancaria_code} · {lote.total_transacoes} transações · {pendentes}{" "}
           pendentes · {conciliadas} lançadas
         </p>
+        {(lote.ignoradas_ja_lancadas > 0 || lote.ignoradas_periodo_fechado > 0) && (
+          <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-3 py-2 mt-2">
+            Ocultadas deste extrato:{" "}
+            {[
+              lote.ignoradas_ja_lancadas > 0 ? `${lote.ignoradas_ja_lancadas} já lançada(s) no Diário` : null,
+              lote.ignoradas_periodo_fechado > 0 ? `${lote.ignoradas_periodo_fechado} de período fechado` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            .
+          </p>
+        )}
       </div>
 
       <TransacoesTable transacoes={lista} loteId={loteId} contas={contas ?? []} currency={currency} />

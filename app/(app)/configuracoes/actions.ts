@@ -36,3 +36,20 @@ export async function atualizarRegimeTributarioAction(
   revalidatePath("/obrigacoes-fiscais");
   return null;
 }
+
+/**
+ * Fecha (ou reabre) a contabilidade até uma data: o banco passa a recusar incluir, alterar ou
+ * excluir lançamentos com data até ela, e a importação de extratos ignora essas transações.
+ * Data vazia = nenhum período fechado.
+ */
+export async function atualizarDataFechamentoAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
+  if (!canManageMembers(currentMembership.role)) {
+    return { error: "Só o dono ou administrador da organização pode fechar ou reabrir períodos." };
+  }
+  const data = String(formData.get("data_fechamento") || "").trim() || null;
+  const { error } = await supabase.rpc("set_data_fechamento", { p_org_id: currentOrgId, p_data: data });
+  if (error) return { error: error.message };
+  revalidatePath("/configuracoes");
+  return null;
+}

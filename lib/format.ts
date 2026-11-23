@@ -18,14 +18,21 @@ export function fmtMoney(value: number, currency = "USD") {
   }).format(arredondarCentavos(value));
 }
 
+// Datas "puras" (YYYY-MM-DD, como as do banco) são formatadas em UTC: new Date("2026-03-30") é
+// meia-noite UTC, que no fuso de Brasília ainda é dia 29 — sem isso, telas renderizadas no
+// navegador mostravam todas as datas um dia antes.
+function opcoesFuso(value: string | Date): { timeZone?: string } {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? { timeZone: "UTC" } : {};
+}
+
 export function fmtDate(value: string | Date) {
   const d = typeof value === "string" ? new Date(value) : value;
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "2-digit" }).format(d);
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "2-digit", ...opcoesFuso(value) }).format(d);
 }
 
 export function fmtDateNumerica(value: string | Date) {
   const d = typeof value === "string" ? new Date(value) : value;
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", ...opcoesFuso(value) }).format(d);
 }
 
 export function fmtDateHora(value: string | Date) {

@@ -1,16 +1,41 @@
 import Link from "next/link";
 import { requireOrgContext, canManageMembers } from "@/lib/org";
 import { RegimeTributarioForm } from "./regime-form";
+import { DataFechamentoForm } from "./fechamento-form";
+import { fmtDateNumerica } from "@/lib/format";
 
 export default async function ConfiguracoesPage() {
-  const { currentMembership } = await requireOrgContext();
+  const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const org = currentMembership.organizations;
+  const { data: orgFechamento } = await supabase
+    .from("organizations")
+    .select("data_fechamento")
+    .eq("id", currentOrgId)
+    .maybeSingle();
+  const dataFechamento = (orgFechamento?.data_fechamento as string | null) ?? null;
 
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Configurações</h1>
         <p className="text-sm text-slate-500 mt-1">{org?.name}</p>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <h2 className="text-sm font-semibold text-slate-900 mb-1">Fechamento da contabilidade</h2>
+        <p className="text-sm text-slate-500 mb-3">
+          {dataFechamento
+            ? `Fechada até ${fmtDateNumerica(dataFechamento)}. `
+            : "Nenhum período fechado. "}
+          Lançamentos com data até a data de fechamento não podem ser incluídos, alterados nem excluídos, e a
+          importação de extratos ignora essas transações. Para corrigir algo de um mês fechado, volte a data,
+          corrija e feche de novo.
+        </p>
+        {canManageMembers(currentMembership.role) ? (
+          <DataFechamentoForm dataAtual={dataFechamento} />
+        ) : (
+          <p className="text-sm text-slate-400">Só o dono ou administrador da organização pode alterar isso.</p>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-4">

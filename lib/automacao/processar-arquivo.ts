@@ -10,6 +10,7 @@ import {
   type TransacaoExtraida,
 } from "@/lib/import/parsers";
 import { classificarTransacoes } from "@/lib/import/classificar-transacoes";
+import { filtrarTransacoesNovas } from "@/lib/import/filtrar-novas";
 import { montarPropostasAcruoEMercado } from "@/lib/accounting/montar-propostas-acruo";
 import { getBalanco } from "@/lib/accounting/demonstrativos";
 import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
@@ -159,6 +160,25 @@ export async function processarArquivoAutomatico(
     };
   }
 
+  // Só o que ainda não foi contabilizado (tira o que já está no Diário e o período fechado).
+  const totalNoArquivo = transacoes.length;
+  const filtro = await filtrarTransacoesNovas(supabase, orgId, contaBancariaCode, transacoes);
+  transacoes = filtro.novas;
+  if (transacoes.length === 0) {
+    return {
+      status: pendencias.length > 0 ? "revisar" : "sucesso",
+      ...vazio,
+      totalTransacoes: totalNoArquivo,
+      pendencias: [
+        ...pendencias,
+        {
+          tipo: "nada_novo",
+          mensagem: `Nenhuma transação nova: ${filtro.jaLancadas} já lançada(s) e ${filtro.periodoFechado} de período fechado.`,
+        },
+      ],
+    };
+  }
+
   const datas = transacoes.map((t) => t.data).sort();
   const periodoInicio = primeiroDiaDoMes(datas[0]);
   const periodoFim = ultimoDiaDoMes(datas[datas.length - 1]);
@@ -180,6 +200,8 @@ export async function processarArquivoAutomatico(
       nome_arquivo: nomeArquivo,
       tipo_arquivo: tipo,
       total_transacoes: transacoes.length,
+      ignoradas_ja_lancadas: filtro.jaLancadas,
+      ignoradas_periodo_fechado: filtro.periodoFechado,
     })
     .select("id")
     .single();
