@@ -117,7 +117,10 @@ export async function sugerirClassificacoes(
   } catch (e) {
     // Falha ao consultar a IA não deve travar a importação — as
     // transações simplesmente ficam sem sugestão, para classificação manual.
-    // Logamos o motivo pra dar pra investigar depois nos Vercel Runtime Logs.
+    // Logamos o motivo pra dar pra investigar depois nos Vercel Runtime Logs
+    // (busque por "sugerirClassificacoes"). Um "401 invalid x-api-key" lá
+    // significa que a ANTHROPIC_API_KEY venceu ou foi apagada no Claude
+    // Console — crie outra chave e troque a variável na Vercel.
     console.error("[sugerirClassificacoes] Falha ao obter sugestões da IA:", e);
     return vazio;
   }
