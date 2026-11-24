@@ -19,7 +19,11 @@ type ItemAgenda = {
   proximoCupom: string | null;
 };
 
-export default async function VencimentosPage() {
+export default async function VencimentosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ data?: string }>;
+}) {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
   const currency = currentMembership.organizations?.base_currency ?? "USD";
 
@@ -27,7 +31,11 @@ export default async function VencimentosPage() {
   // ativo ja resgatado/vencido (ex.: um CD que ja pagou, ou uma posicao ja
   // liquidada que ainda tem data_vencimento cadastrada) aparecia aqui como
   // se estivesse pendente, com "dias restantes" negativo.
-  const hojeISO = new Date().toISOString().slice(0, 10);
+  // Data de corte da agenda: hoje (fuso de Brasília) por padrão, ajustável no seletor.
+  const hojeISO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const { data: dataParam } = await searchParams;
+  const dataRef = dataParam && /^\d{4}-\d{2}-\d{2}$/.test(dataParam) ? dataParam : hojeISO;
+  const ehHoje = dataRef === hojeISO;
 
   const [{ data: ativos, error: errAtivos }, { data: dividas, error: errDividas }, { data: config }] = await Promise.all([
     supabase
@@ -35,21 +43,21 @@ export default async function VencimentosPage() {
       .select("id, nome, custodiante, conta_code, valor_atual, taxa_cupom, data_vencimento, data_pagamento_anterior, periodicidade_cupom, valor_mercado, data_posicao")
       .eq("org_id", currentOrgId)
       .not("data_vencimento", "is", null)
-      .gte("data_vencimento", hojeISO),
+      .gte("data_vencimento", dataRef),
     supabase
       .from("dividas")
       .select("id, nome, credor, valor_atual, data_vencimento")
       .eq("org_id", currentOrgId)
       .not("data_vencimento", "is", null)
-      .gte("data_vencimento", hojeISO),
+      .gte("data_vencimento", dataRef),
     supabase.from("alert_configs").select("*").eq("org_id", currentOrgId).maybeSingle(),
   ]);
   if (errAtivos) throw errAtivos;
   if (errDividas) throw errDividas;
 
-  const hoje = new Date();
-  // Valor = saldo contábil da conta vinculada (o mesmo da Carteira); sem conta, o cadastro.
-  const saldos = await getSaldosPorContaAteData(supabase, currentOrgId, hojeISO);
+  const hoje = new Date(`${dataRef}T00:00:00Z`);
+  // Valor = saldo contábil da conta vinculada na data de corte (o mesmo da Carteira); sem conta, o cadastro.
+  const saldos = await getSaldosPorContaAteData(supabase, currentOrgId, dataRef);
   const saldoPorConta = new Map(saldos.map((s) => [s.conta_code, Number(s.saldo)]));
   const datasPosicao = (ativos ?? []).map((a) => a.data_posicao as string | null).filter(Boolean) as string[];
   const ultimaPosicao = datasPosicao.sort().at(-1) ?? null;
@@ -71,7 +79,7 @@ export default async function VencimentosPage() {
         a.data_pagamento_anterior as string | null,
         a.periodicidade_cupom as string | null,
         a.data_vencimento as string,
-        hojeISO
+        dataRef
       ),
     })),
     ...(dividas ?? []).map((d) => ({
@@ -97,7 +105,7 @@ export default async function VencimentosPage() {
           agenda, ordenados por proximidade.
         </p>
         <p className="text-xs mt-1 text-slate-500">
-          Valor = saldo contábil de hoje.{" "}
+          Valor = saldo contábil em {fmtDate(dataRef)}.{" "}
           {ultimaPosicao
             ? `Mercado e próximo cupom conforme o extrato do custodiante (posição mais recente: ${fmtDate(ultimaPosicao)}).`
             : "Posições ainda não conferidas com o extrato do custodiante."}
@@ -113,6 +121,31 @@ export default async function VencimentosPage() {
         </Link>
       )}
       </div>
+
+      <form method="get" className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-xl p-4">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Data de corte</label>
+          <input
+            type="date"
+            name="data"
+            defaultValue={dataRef}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          />
+        </div>
+        <button type="submit" className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-1.5 hover:bg-slate-800">
+          Atualizar
+        </button>
+        {!ehHoje && (
+          <Link href="/vencimentos" className="text-sm text-slate-500 hover:underline py-1.5">
+            Voltar para hoje
+          </Link>
+        )}
+        <span className="text-xs text-slate-400">
+          Agenda a partir de <strong className="text-slate-600">{fmtDate(dataRef)}</strong>
+          {ehHoje ? " (hoje)" : ""}: vencimentos e próximos cupons a partir desta data, dias restantes contados dela e
+          valor contábil nesta data.
+        </span>
+      </form>
 
       {canManageMembers(currentMembership.role) && (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
