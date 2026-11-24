@@ -1,4 +1,8 @@
-import { requireOrgContext, canManageMembers } from "@/lib/org";
+import Link from "next/link";
+import { RefreshCw } from "lucide-react";
+import { requireOrgContext, canManageMembers, canWrite } from "@/lib/org";
+import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
+import { proximoCupom } from "@/lib/portfolio/conciliar-posicoes-nucleo";
 import { AlertConfigForm } from "./alert-config-form";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { diasParaVencimento } from "@/lib/portfolio/indices";
@@ -10,6 +14,9 @@ type ItemAgenda = {
   contraparte: string | null;
   valor: number;
   data_vencimento: string;
+  valorMercado: number | null;
+  dataPosicao: string | null;
+  proximoCupom: string | null;
 };
 
 export default async function VencimentosPage() {
@@ -25,7 +32,7 @@ export default async function VencimentosPage() {
   const [{ data: ativos, error: errAtivos }, { data: dividas, error: errDividas }, { data: config }] = await Promise.all([
     supabase
       .from("ativos")
-      .select("id, nome, custodiante, valor_atual, taxa_cupom, data_vencimento")
+      .select("id, nome, custodiante, conta_code, valor_atual, taxa_cupom, data_vencimento, data_pagamento_anterior, periodicidade_cupom, valor_mercado, data_posicao")
       .eq("org_id", currentOrgId)
       .not("data_vencimento", "is", null)
       .gte("data_vencimento", hojeISO),
@@ -41,6 +48,11 @@ export default async function VencimentosPage() {
   if (errDividas) throw errDividas;
 
   const hoje = new Date();
+  // Valor = saldo contábil da conta vinculada (o mesmo da Carteira); sem conta, o cadastro.
+  const saldos = await getSaldosPorContaAteData(supabase, currentOrgId, hojeISO);
+  const saldoPorConta = new Map(saldos.map((s) => [s.conta_code, Number(s.saldo)]));
+  const datasPosicao = (ativos ?? []).map((a) => a.data_posicao as string | null).filter(Boolean) as string[];
+  const ultimaPosicao = datasPosicao.sort().at(-1) ?? null;
 
   const itens: ItemAgenda[] = [
     ...(ativos ?? []).map((a) => ({
@@ -48,8 +60,19 @@ export default async function VencimentosPage() {
       origem: "ativo" as const,
       nome: a.nome,
       contraparte: a.custodiante,
-      valor: Number(a.valor_atual),
+      valor:
+        a.conta_code && saldoPorConta.has(a.conta_code)
+          ? Math.abs(saldoPorConta.get(a.conta_code)!)
+          : Number(a.valor_atual),
       data_vencimento: a.data_vencimento as string,
+      valorMercado: a.valor_mercado != null ? Number(a.valor_mercado) : null,
+      dataPosicao: (a.data_posicao as string | null) ?? null,
+      proximoCupom: proximoCupom(
+        a.data_pagamento_anterior as string | null,
+        a.periodicidade_cupom as string | null,
+        a.data_vencimento as string,
+        hojeISO
+      ),
     })),
     ...(dividas ?? []).map((d) => ({
       id: d.id,
@@ -58,17 +81,37 @@ export default async function VencimentosPage() {
       contraparte: d.credor,
       valor: Number(d.valor_atual),
       data_vencimento: d.data_vencimento as string,
+      valorMercado: null,
+      dataPosicao: null,
+      proximoCupom: null,
     })),
   ].sort((a, b) => (a.data_vencimento < b.data_vencimento ? -1 : 1));
 
   return (
     <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Agenda de Vencimentos</h1>
         <p className="text-sm text-slate-500">
           Ativos (Carteira) e dívidas (Dívidas &amp; Passivos) com data de vencimento cadastrada, juntos numa única
           agenda, ordenados por proximidade.
         </p>
+        <p className="text-xs mt-1 text-slate-500">
+          Valor = saldo contábil de hoje.{" "}
+          {ultimaPosicao
+            ? `Mercado e próximo cupom conforme o extrato do custodiante (posição mais recente: ${fmtDate(ultimaPosicao)}).`
+            : "Posições ainda não conferidas com o extrato do custodiante."}
+        </p>
+      </div>
+      {canWrite(currentMembership.role) && (
+        <Link
+          href="/carteira/posicoes"
+          className="shrink-0 inline-flex items-center gap-1.5 text-sm border border-emerald-300 text-emerald-700 rounded-md px-3 py-2 hover:bg-emerald-50"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Atualizar posições pelo extrato
+        </Link>
+      )}
       </div>
 
       {canManageMembers(currentMembership.role) && (
@@ -92,6 +135,8 @@ export default async function VencimentosPage() {
               <th className="text-left px-4 py-2">Nome</th>
               <th className="text-left px-4 py-2">Contraparte</th>
               <th className="text-right px-4 py-2">Valor</th>
+              <th className="text-right px-4 py-2">Mercado (extrato)</th>
+              <th className="text-right px-4 py-2">Próximo cupom</th>
               <th className="text-right px-4 py-2">Dias restantes</th>
             </tr>
           </thead>
@@ -114,6 +159,15 @@ export default async function VencimentosPage() {
                   <td className="px-4 py-2 text-slate-800">{item.nome}</td>
                   <td className="px-4 py-2 text-slate-500">{item.contraparte ?? "—"}</td>
                   <td className="px-4 py-2 text-right">{fmtMoney(item.valor, currency)}</td>
+                  <td
+                    className="px-4 py-2 text-right text-slate-500"
+                    title={item.dataPosicao ? `Posição em ${fmtDate(item.dataPosicao)}` : undefined}
+                  >
+                    {item.valorMercado != null ? fmtMoney(item.valorMercado, currency) : "—"}
+                  </td>
+                  <td className="px-4 py-2 text-right text-slate-500">
+                    {item.proximoCupom ? fmtDate(item.proximoCupom) : "—"}
+                  </td>
                   <td className={`px-4 py-2 text-right font-medium ${urgente ? "text-amber-700" : "text-slate-700"}`}>
                     {dias} dias
                   </td>
@@ -122,7 +176,7 @@ export default async function VencimentosPage() {
             })}
             {itens.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-4 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-4 text-center text-slate-400">
                   Nenhum ativo ou dívida com vencimento cadastrado.
                 </td>
               </tr>

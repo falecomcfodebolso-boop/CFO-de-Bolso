@@ -1,8 +1,12 @@
 import { requireOrgContext } from "@/lib/org";
 import { UploadForm } from "./upload-form";
+import { NotaNegociacaoForm } from "./nota-form";
 import { fmtDateHora } from "@/lib/format";
 import Link from "next/link";
 import { ExcluirLoteButton } from "./excluir-lote-button";
+
+// A leitura de nota de negociação pela IA (foto/PDF) pode levar ~20–40 s.
+export const maxDuration = 60;
 
 export default async function ImportarPage() {
   const { supabase, currentOrgId, currentMembership } = await requireOrgContext();
@@ -48,6 +52,8 @@ export default async function ImportarPage() {
       </div>
 
       <UploadForm contasBancarias={contas ?? []} moeda={moeda} />
+
+      <NotaNegociacaoForm />
 
       <div>
         <h2 className="text-sm font-semibold text-slate-700 mb-2">Importações recentes</h2>

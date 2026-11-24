@@ -1,5 +1,7 @@
 "use server";
 
+import { atualizarPosicoesAutomaticamente } from "@/lib/portfolio/posicoes-extrato";
+
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -44,6 +46,8 @@ export type UploadUnificadoState = {
   propostasAcruo?: PropostaApuracao[];
   naoReconhecidas?: EntradaAcruoExtrato[];
   propostasMercado?: PropostaMarcacao[];
+  /** Regra automática: posições da Carteira/Vencimentos atualizadas a partir deste extrato. */
+  posicoes?: { custodiante?: string; dataBase?: string; atualizadas: number; avisos: string[] };
 } | null;
 
 /**
@@ -170,6 +174,7 @@ export async function uploadImportUnificadoAction(
   let propostasMercado: PropostaMarcacao[] = [];
   let dataBase: string | undefined;
   let formato: "itau" | "pershing" | undefined;
+  let posicoes: NonNullable<UploadUnificadoState>["posicoes"];
 
   let ativosJaCadastrados: string[] = [];
   if (tipo === "pdf") {
@@ -194,6 +199,13 @@ export async function uploadImportUnificadoAction(
       dataBase = resultadoAcruo.dataBase ?? undefined;
       formato = resultadoAcruo.formato;
     }
+
+    const p = await atualizarPosicoesAutomaticamente(supabase, currentOrgId, buffer.slice(0), `Importação — ${file.name}`);
+    if (p.reconhecido) {
+      posicoes = { custodiante: p.custodiante, dataBase: p.dataBase, atualizadas: p.atualizadas, avisos: p.avisos };
+      revalidatePath("/carteira");
+      revalidatePath("/vencimentos");
+    }
     // Erro aqui é silencioso de propósito: pode ser só que esse PDF não é um
     // Statement de acruamento (ex.: é um extrato de conta corrente comum).
   }
@@ -202,7 +214,8 @@ export async function uploadImportUnificadoAction(
     propostasAtivos.length > 0 ||
     ativosJaCadastrados.length > 0 ||
     propostasAcruo.length > 0 ||
-    propostasMercado.length > 0;
+    propostasMercado.length > 0 ||
+    !!posicoes;
 
   if (transacoes.length === 0 && !temOutrasPropostas) {
     if (erroTransacoes) return { error: erroTransacoes };
@@ -251,6 +264,7 @@ export async function uploadImportUnificadoAction(
         propostasAcruo: propostasAcruo.length > 0 ? propostasAcruo : undefined,
         naoReconhecidas: naoReconhecidas.length > 0 ? naoReconhecidas : undefined,
         propostasMercado: propostasMercado.length > 0 ? propostasMercado : undefined,
+        posicoes,
       };
     }
 
@@ -339,6 +353,7 @@ export async function uploadImportUnificadoAction(
     propostasAcruo: propostasAcruo.length > 0 ? propostasAcruo : undefined,
     naoReconhecidas: naoReconhecidas.length > 0 ? naoReconhecidas : undefined,
     propostasMercado: propostasMercado.length > 0 ? propostasMercado : undefined,
+    posicoes,
   };
 }
 

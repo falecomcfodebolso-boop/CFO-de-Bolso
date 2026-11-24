@@ -16,6 +16,12 @@ export type Ativo = {
   quantidade?: number | null;
   /** Valor de face unitário de cada papel (ex: US$ 1.000,00 por nota). */
   valor_face?: number | null;
+  /** Valor de mercado limpo (sem juros) informado pelo custodiante no último extrato (ver data_posicao). */
+  valor_mercado?: number | null;
+  /** Juros acruados informados pelo custodiante no último extrato. */
+  juros_acruados_extrato?: number | null;
+  /** Data-base do último extrato que atualizou a posição. */
+  data_posicao?: string | null;
 };
 
 export function totalCarteira(ativos: Ativo[]) {

@@ -339,6 +339,21 @@ export function UploadForm({
         </div>
       )}
 
+      {state?.posicoes && (
+        <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 space-y-1">
+          <p>
+            Posições do {state.posicoes.custodiante} atualizadas automaticamente na Carteira e em Vencimentos
+            {state.posicoes.dataBase ? ` (data-base ${fmtDataBR(state.posicoes.dataBase)})` : ""}:{" "}
+            {state.posicoes.atualizadas} papel(éis).
+          </p>
+          {state.posicoes.avisos.map((a, i) => (
+            <p key={i} className="text-amber-800">
+              {a}
+            </p>
+          ))}
+        </div>
+      )}
+
       {state?.ativosJaCadastrados && state.ativosJaCadastrados.length > 0 && (
         <div className="text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-md px-3 py-2">
           {state.ativosJaCadastrados.length}{" "}

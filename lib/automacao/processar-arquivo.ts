@@ -12,6 +12,7 @@ import {
 import { classificarTransacoes } from "@/lib/import/classificar-transacoes";
 import { filtrarTransacoesNovas } from "@/lib/import/filtrar-novas";
 import { montarPropostasAcruoEMercado } from "@/lib/accounting/montar-propostas-acruo";
+import { atualizarPosicoesAutomaticamente } from "@/lib/portfolio/posicoes-extrato";
 import { getBalanco } from "@/lib/accounting/demonstrativos";
 import { getSaldosPorContaAteData } from "@/lib/accounting/queries";
 import { fmtDateNumerica } from "@/lib/format";
@@ -103,7 +104,7 @@ async function desfazerLancamentos(supabase: SupabaseClient, orgId: string, lote
     .eq("lote_id", loteId);
 }
 
-export async function processarArquivoAutomatico(
+async function processarArquivoInterno(
   supabase: SupabaseClient,
   args: { orgId: string; contaBancariaCode: string; nomeArquivo: string; buffer: ArrayBuffer }
 ): Promise<ResultadoProcessamento> {
@@ -336,4 +337,43 @@ export async function processarArquivoAutomatico(
   }
 
   return { status: "sucesso", loteId, lancamentosCriados: criados.length, pendencias: [], ...base };
+}
+
+/**
+ * Regra automática de posições: todo extrato de investimentos (PDF) que passa pela automação
+ * também atualiza as posições da Carteira/Vencimentos (quantidade, valor de mercado, juros
+ * acruados, data-base). É informativo — não bloqueia nem altera os lançamentos contábeis.
+ */
+export async function processarArquivoAutomatico(
+  supabase: SupabaseClient,
+  args: { orgId: string; contaBancariaCode: string; nomeArquivo: string; buffer: ArrayBuffer }
+): Promise<ResultadoProcessamento> {
+  const informativas: Pendencia[] = [];
+  let posicoesAtualizadas = false;
+  if (detectarTipoArquivo(args.nomeArquivo) === "pdf") {
+    try {
+      const p = await atualizarPosicoesAutomaticamente(
+        supabase,
+        args.orgId,
+        args.buffer.slice(0),
+        `Automação — ${args.nomeArquivo}`
+      );
+      if (p.reconhecido) {
+        posicoesAtualizadas = p.atualizadas > 0;
+        informativas.push({
+          tipo: "posicoes",
+          mensagem: `Posições do ${p.custodiante} atualizadas para ${p.dataBase}: ${p.atualizadas} papel(éis).`,
+        });
+        for (const aviso of p.avisos) informativas.push({ tipo: "posicoes_revisar", mensagem: aviso });
+      }
+    } catch (e) {
+      informativas.push({ tipo: "posicoes_revisar", mensagem: `Não consegui atualizar as posições: ${(e as Error).message}` });
+    }
+  }
+
+  const r = await processarArquivoInterno(supabase, args);
+  // Extrato só de posições (sem movimento de caixa): não é erro se as posições foram atualizadas.
+  const semCaixa = r.status === "erro" && r.pendencias.every((x) => x.tipo === "leitura");
+  if (semCaixa && posicoesAtualizadas) return { ...r, status: "sucesso", pendencias: informativas };
+  return { ...r, pendencias: [...r.pendencias, ...informativas] };
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Upload } from "lucide-react";
+import { Upload, RefreshCw } from "lucide-react";
 import { requireOrgContext, canWrite } from "@/lib/org";
 import { NovoAtivoForm } from "./novo-ativo-form";
 import { updateAtivoDetalhesAction } from "./actions";
@@ -56,6 +56,13 @@ export default async function CarteiraPage({
   const ativosBrutos = (ativosData ?? []) as Ativo[];
   const ativos = sincronizarComSaldoContabil(ativosBrutos, saldos);
   const analises = analisesData ?? [];
+  const ultimaPosicao = new Map<string, string>();
+  for (const a of ativosBrutos) {
+    if (!a.data_posicao) continue;
+    const c = a.custodiante ?? "—";
+    if (!ultimaPosicao.has(c) || a.data_posicao > ultimaPosicao.get(c)!) ultimaPosicao.set(c, a.data_posicao);
+  }
+  const posicoesPorCustodiante = [...ultimaPosicao.entries()].sort();
 
   const total = totalCarteira(ativos);
   const hhiValue = hhi(ativos);
@@ -104,9 +111,23 @@ export default async function CarteiraPage({
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Carteira &amp; Índices</h1>
           <p className="text-sm text-slate-500">Concentração, rentabilidade e risco da carteira de investimentos.</p>
+          <p className="text-xs mt-1 text-slate-500">
+            {posicoesPorCustodiante.length > 0
+              ? `Posições conferidas com o extrato: ${posicoesPorCustodiante
+                  .map(([c, d]) => `${c} em ${fmtDate(d)}`)
+                  .join(" · ")}`
+              : "Posições ainda não conferidas com o extrato do custodiante."}
+          </p>
         </div>
         {podeEscrever && (
           <div className="shrink-0 flex items-center gap-2">
+            <Link
+              href="/carteira/posicoes"
+              className="inline-flex items-center gap-1.5 text-sm border border-emerald-300 text-emerald-700 rounded-md px-3 py-2 hover:bg-emerald-50"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Atualizar posições pelo extrato
+            </Link>
             <Link
               href="/carteira/migrar"
               className="inline-flex items-center gap-1.5 text-sm border border-slate-300 text-slate-700 rounded-md px-3 py-2 hover:bg-slate-50"
@@ -289,6 +310,9 @@ export default async function CarteiraPage({
                 <th className="text-left px-4 py-2">Custodiante</th>
                 <th className="text-right px-4 py-2">Valor</th>
                 <th></th>
+                <th className="text-right px-4 py-2" title="Valor de mercado (sem juros) e juros acruados informados pelo custodiante no último extrato — informativo, não altera a contabilidade">
+                  Mercado (extrato)
+                </th>
                 <th className="text-right px-4 py-2">% Carteira</th>
                 <th className="text-right px-4 py-2">Cupom</th>
                 <th className="text-right px-4 py-2">Vencimento</th>
@@ -322,6 +346,20 @@ export default async function CarteiraPage({
                         >
                           contábil
                         </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-600 whitespace-nowrap">
+                      {a.valor_mercado != null ? (
+                        <span title={`Posição em ${a.data_posicao ? fmtDate(a.data_posicao) : "—"}`}>
+                          {fmtMoney(Number(a.valor_mercado), currency)}
+                          {Number(a.juros_acruados_extrato ?? 0) > 0 && (
+                            <span className="block text-[11px] text-slate-400">
+                              + juros {fmtMoney(Number(a.juros_acruados_extrato), currency)}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        "—"
                       )}
                     </td>
                     <td className="px-4 py-2 text-right text-slate-500">{(pct * 100).toFixed(1)}%</td>
